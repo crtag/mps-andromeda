@@ -1,0 +1,29 @@
+services:
+  quick-app:
+    image: crtag/quick-app:1.0.0
+    volumes:
+      - shared-disk:/mnt/shared-disk
+      - ./workspace:/app/workspace
+    environment:
+      - KUBECONFIG=/root/.kube/config
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  disk-access:
+    image: ghcr.io/andromeda-ai/utility-box-docker:fc5c71f00fe9306841207ff9a95f97678197f8bc
+    volumes:
+      - shared-disk:/mnt/shared-disk
+      - ./workspace:/app/workspace
+    command: >
+      sh -c "echo 'Test file content' > /app/workspace/test.txt && 
+             echo 'Shared disk test' > /mnt/shared-disk/shared_test.txt && 
+             sleep infinity"
+
+volumes:
+  shared-disk:
+    driver: local
