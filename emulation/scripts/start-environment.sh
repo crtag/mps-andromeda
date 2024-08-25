@@ -32,6 +32,18 @@ $compose_command pull
 
 cleanup
 
+if command -v nvidia-smi &> /dev/null
+then
+    echo "NVIDIA GPU driver found. The application will use GPU acceleration if available."
+    echo "Checking GPU health..."
+    nvidia-smi
+    if nvidia-smi | grep -q "infoROM is corrupted"; then
+        echo "WARNING: GPU infoROM corruption detected. Consider troubleshooting GPU issues."
+    fi
+else
+    echo "NVIDIA GPU driver not found. The application will run without GPU acceleration."
+fi
+
 echo "Starting QUICK application environment with GPU support..."
 $compose_command up -d
 

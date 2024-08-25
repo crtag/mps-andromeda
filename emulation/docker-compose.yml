@@ -6,6 +6,7 @@ services:
       - ./workspace:/app/workspace
     environment:
       - KUBECONFIG=/root/.kube/config
+    command: "tail -f /dev/null"
     deploy:
       resources:
         reservations:
@@ -19,10 +20,7 @@ services:
     volumes:
       - shared-disk:/mnt/shared-disk
       - ./workspace:/app/workspace
-    command: >
-      sh -c "echo 'Test file content' > /app/workspace/test.txt && 
-             echo 'Shared disk test' > /mnt/shared-disk/shared_test.txt && 
-             sleep infinity"
+    command: "sleep infinity"
 
 volumes:
   shared-disk:
