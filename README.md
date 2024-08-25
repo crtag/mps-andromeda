@@ -90,6 +90,18 @@ The shared disk volume is automatically created and managed by Docker Compose.
 You don't need to create it manually. The volume persists between container 
 restarts unless explicitly removed.
 
+## Example run sequence
+Note: `water.in` is included in the repository for testing purposes and will be available for use in the `workspace` directory.
+Output will be generated in the same directory.
+
+```
+./scripts/start-environment.sh
+docker compose exec quick-app quick /app/workspace/water.in
+
+# Repeat the above command with different input files as needed
+./scripts/stop-environment.sh
+```
+
 ## GPU Support
 
 This setup supports CUDA GPU acceleration. To use it:
