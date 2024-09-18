@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quick-app
+  namespace: ${KUBE_NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: quick-app
+  template:
+    metadata:
+      labels:
+        app: quick-app
+    spec:
+      containers:
+      - name: quick-app
+        image: crtag/quick-app:1.0.0
+        command: ["tail", "-f", "/dev/null"]
+        volumeMounts:
+        - name: shared-disk
+          mountPath: /mnt/shared-disk
+        - name: workspace
+          mountPath: /app/workspace
+        env:
+        - name: KUBECONFIG
+          value: /root/.kube/config
+        resources:
+          limits:
+            nvidia.com/gpu: 1  # Requesting 1 GPU, adjust as needed
+      volumes:
+      - name: shared-disk
+        persistentVolumeClaim:
+          claimName: shared-disk
+      - name: workspace
+        emptyDir: {}

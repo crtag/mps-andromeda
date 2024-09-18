@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-disk
+  namespace: ${KUBE_NAMESPACE}
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: microk8s-hostpath
+  resources:
+    requests:
+      storage: 1Gi
