@@ -1,0 +1,4 @@
+DFT PBE0 D3MBJ BASIS=6-31G* EXPORT=MOLDEN ENERGY
+
+I         -0.08095        0.20683        0.00000
+I          2.68305        0.20683        0.00000
