@@ -1,10 +1,11 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: disk-access
-  namespace: ${KUBE_NAMESPACE}
+  namespace: tenant-ac-machine
 spec:
   replicas: 1
+  serviceName: disk-access
   selector:
     matchLabels:
       app: disk-access
@@ -18,13 +19,9 @@ spec:
         image: ghcr.io/andromeda-ai/utility-box-docker:fc5c71f00fe9306841207ff9a95f97678197f8bc
         command: ["sleep", "infinity"]
         volumeMounts:
-        - name: shared-disk
+        - name: andromeda-shared-disk
           mountPath: /mnt/shared-disk
-        - name: workspace
-          mountPath: /app/workspace
       volumes:
-      - name: shared-disk
+      - name: andromeda-shared-disk
         persistentVolumeClaim:
-          claimName: shared-disk
-      - name: workspace
-        emptyDir: {}
+          claimName: andromeda-shared-disk

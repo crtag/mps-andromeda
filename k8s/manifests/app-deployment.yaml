@@ -1,10 +1,11 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: quick-app
-  namespace: ${KUBE_NAMESPACE}
+  namespace: tenant-ac-machine
 spec:
   replicas: 1
+  serviceName: quick-app
   selector:
     matchLabels:
       app: quick-app
@@ -18,19 +19,12 @@ spec:
         image: crtag/quick-app:1.0.0
         command: ["tail", "-f", "/dev/null"]
         volumeMounts:
-        - name: shared-disk
+        - name: andromeda-shared-disk
           mountPath: /mnt/shared-disk
-        - name: workspace
-          mountPath: /app/workspace
-        env:
-        - name: KUBECONFIG
-          value: /root/.kube/config
         resources:
           limits:
-            nvidia.com/gpu: 1  # Requesting 1 GPU, adjust as needed
+            nvidia.com/gpu: 1 
       volumes:
-      - name: shared-disk
+      - name: andromeda-shared-disk
         persistentVolumeClaim:
-          claimName: shared-disk
-      - name: workspace
-        emptyDir: {}
+          claimName: andromeda-shared-disk
