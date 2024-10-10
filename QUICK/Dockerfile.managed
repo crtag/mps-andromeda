@@ -1,0 +1,14 @@
+# Start from the base QUICK application image
+FROM crtag/quick-app:latest
+
+# Set the working directory
+WORKDIR /src/install
+
+# Copy the job management script from the local context into the container
+COPY job_manager.sh /src/install/job_manager.sh
+
+# Make the script executable
+RUN chmod +x /src/install/job_manager.sh
+
+# Default command to run the job management script
+CMD ["/src/install/job_manager.sh"]
