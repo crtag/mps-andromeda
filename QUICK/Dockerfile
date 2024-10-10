@@ -48,7 +48,9 @@ RUN apt-get update -y \
  && apt-get install -y \
     openmpi-bin \
     openmpi-common \
-    libopenmpi-dev
+    libopenmpi-dev \
+    curl \
+    procps
 
 # Copy the compiled QUICK files from the build stage
 COPY --from=base-mpi-cuda-12.0.1 /src/install /src/install
