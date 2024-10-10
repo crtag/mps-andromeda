@@ -1,0 +1,12 @@
+{
+  "projects": {
+    "default": "mps-andromeda"
+  },
+  "targets": {},
+  "etags": {
+    "mps-andromeda": {
+      "extensionInstances": {}
+    }
+  },
+  "dataconnectEmulatorConfig": {}
+}
