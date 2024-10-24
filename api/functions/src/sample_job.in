@@ -1,5 +1,6 @@
 water.in
 DFT PBE0 D3MBJ BASIS=6-311G* cutoff=1.0e-9 denserms=1.0e-6 zmake OPTIMIZE=500 DIPOLE EXPORT=MOLDEN
+
 O         -3.11855        1.86261        0.00000
 H         -1.80493        1.55537        0.05611
 H         -4.28715        2.65875       -0.49084
