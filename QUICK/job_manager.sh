@@ -1,9 +1,40 @@
 #!/bin/bash
 DEFAULT_APP_EXECUTABLE="quick.cuda.MPI"
 DEFAULT_STATUS_CHECK_INTERVAL=60
+DEFAULT_SHARED_DIR="/mnt/shared-disk"
+
+# Trap SIGCHLD to ensure terminated background processes are cleaned up
+trap 'wait' SIGCHLD
+
+# Check if shared directory is set or use default
+if [[ -z "${SHARED_DIR}" ]]; then
+    echo "WARNING: SHARED_DIR not set, using default value $DEFAULT_SHARED_DIR"
+fi
+
+# Directory for shared data
+SHARED_DIR="${SHARED_DIR:-$DEFAULT_SHARED_DIR}"
+
+mkdir -p "${SHARED_DIR}"
+mkdir -p "${SHARED_DIR}/.processed"
+
+if [[ ! -w "${SHARED_DIR}" ]]; then
+    echo "ERROR: No write permission to SHARED_DIR"
+    exit 1
+fi
+
+LOG_FILE="$SHARED_DIR/job_manager.log"
+
+# Logging function
+log_message() {
+    local message="$1"
+    local timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
+
+    echo "[$timestamp] $message"   # Output to console
+    echo "[$timestamp] $message" >> "$LOG_FILE"  # Append to log file
+}
 
 # Add basic env var validation
-if [[ -z "${API_URL_JOB_ASSIGNMENT}" || -z "${API_URL_STATUS_REPORT}" || -z "${SHARED_DIR}" ]]; then
+if [[ -z "${API_URL_JOB_ASSIGNMENT}" || -z "${API_URL_STATUS_REPORT}" ]]; then
     log_message "ERROR: Required environment variables not set"
     exit 1
 fi
@@ -22,25 +53,6 @@ STATUS_CHECK_INTERVAL="${STATUS_CHECK_INTERVAL:-$DEFAULT_STATUS_CHECK_INTERVAL}"
 # Define API endpoints
 JOB_ASSIGNMENT_ENDPOINT="${API_URL_JOB_ASSIGNMENT}"
 STATUS_REPORT_ENDPOINT="${API_URL_STATUS_REPORT}"
-
-mkdir -p "${SHARED_DIR}"
-mkdir -p "${SHARED_DIR}/.processed"
-
-if [[ ! -w "${SHARED_DIR}" ]]; then
-    log_message "ERROR: No write permission to SHARED_DIR"
-    exit 1
-fi
-
-# Directory for shared data
-SHARED_DIR="${SHARED_DIR}"
-LOG_FILE="$SHARED_DIR/job_manager.log"
-
-# Logging function
-log_message() {
-    local message="$1"
-    local timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
-    echo "[$timestamp] $message" >> "$LOG_FILE"
-}
 
 # Function to report status
 report_status() {
@@ -103,7 +115,7 @@ EOF
         )
         
         # Handle successful report
-        if [[ "$response_code" == "200" ]]; then
+        if [[ "$response_code" == "204" ]]; then
             # Update offset file if still running
             if [[ "$status" == "RUNNING" ]]; then
                 sed -i.bak "/^${file_key}:/d" "${offset_file}"
@@ -145,13 +157,15 @@ fetch_new_job() {
         echo "$job_spec" > "$input_file"
 
         # start the execution of the job
+        # mpirun --allow-run-as-root -np 1 quick.cuda.MPI /mnt/shared-disk/water.in >> /mnt/shared-disk/job_manager.log 2>&1 &
         log_message "Starting job execution"
-        if ! mpirun --allow-run-as-root -np 1 "$APP_EXECUTABLE" "$input_file" >> "$LOG_FILE" 2>&1 & then
-            log_message "ERROR: Failed to start job"
-            return 1
-        fi
+
+        # Start the job in the background
+        mpirun --allow-run-as-root -np 1 "$APP_EXECUTABLE" "$input_file" >> "$LOG_FILE" 2>&1 &
         pid=$!
+
         log_message "Job started with PID: $pid"
+
     else
         # branch logic based on the HTTP response code
         if [[ "$http_code" == "404" ]]; then
@@ -167,14 +181,14 @@ main_loop() {
     while true; do
         # Check if APP is running
         if pgrep -x "$APP_EXECUTABLE" > /dev/null; then
-            echo "$APP_EXECUTABLE is running"
+            log_message "$APP_EXECUTABLE is running"
             report_status
         # If APP is not running but has output files, report status
-        elif [[ -n $(find "$SHARED_DIR" -maxdepth 1 -name "*.out" -size +0) ]]; then
-            echo "$APP_EXECUTABLE is not running, but there are output files, reporting and cleaning up..."
+        elif [[ -n $(find "$SHARED_DIR" -maxdepth 1 -name "*.out") ]]; then
+            log_message "$APP_EXECUTABLE is not running, but there are output files, reporting and cleaning up..."
             report_status
         else
-            echo "$APP_EXECUTABLE is not running, fetching new job..."
+            log_message "$APP_EXECUTABLE is not running, fetching new job..."
             fetch_new_job
         fi
         # Sleep before the next cycle

@@ -1,6 +1,14 @@
 # Start from the base QUICK application image
 FROM crtag/quick-app:latest
 
+RUN apt-get update -y \
+ && apt-get install -y \
+    curl \
+    procps \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
+
+
 # Set the working directory
 WORKDIR /src/install
 
