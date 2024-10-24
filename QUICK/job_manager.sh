@@ -78,6 +78,7 @@ report_status() {
         
         local base_name=$(basename "$input_file" .in)
         local output_file="${SHARED_DIR}/${base_name}.out"
+        local molden_file="${SHARED_DIR}/${base_name}.molden"
         local file_key="${base_name}.out"
         
         # Initialize offset tracking if it doesn't exist for this file
@@ -114,19 +115,38 @@ report_status() {
         
         # Prepare and send report
         local response_code
-        response_code=$(curl -s -w "%{http_code}" -o /dev/null \
-            -X POST "${STATUS_REPORT_ENDPOINT}" \
-            -H "Content-Type: application/json" \
-            -d @- << EOF
-{
-    "filename": "$file_key",
-    "status": "$status",
-    "new_content": "$new_lines",
-    "offset": $current_offset
-}
+        
+        if [[ -n "$molden_content" ]]; then
+            # Report with molden file
+            response_code=$(curl -s -w "%{http_code}" -o /dev/null \
+                -X POST "${STATUS_REPORT_ENDPOINT}" \
+                -H "Content-Type: application/json" \
+                -d @- << EOF
+        {
+            "filename": "$file_key",
+            "status": "$status",
+            "new_content": "$new_lines",
+            "offset": $current_offset,
+            "molden_file": "$molden_content"
+        }
 EOF
         )
-        
+        else
+            # Report without molden file
+            response_code=$(curl -s -w "%{http_code}" -o /dev/null \
+                -X POST "${STATUS_REPORT_ENDPOINT}" \
+                -H "Content-Type: application/json" \
+                -d @- << EOF
+        {
+            "filename": "$file_key",
+            "status": "$status",
+            "new_content": "$new_lines",
+            "offset": $current_offset
+        }
+EOF
+        )
+        fi
+
         # Handle successful report
         if [[ "$response_code" == "204" ]]; then
             # Update offset file if still running
@@ -137,6 +157,7 @@ EOF
                 # Move files to processed directory and cleanup
                 mv "$input_file" "$processed_dir/"
                 [[ -f "$output_file" ]] && mv "$output_file" "$processed_dir/"
+                [[ -f "$molden_file" ]] && mv "$molden_file" "$processed_dir/"
                 sed -i.bak "/^${file_key}:/d" "${OFFSET_FILE}"
                 rm -f "${OFFSET_FILE}.bak"
             fi
