@@ -39,8 +39,8 @@ exports.handler = onRequest((req, res) => {
     const content = payload.new_content ? Buffer.from(payload.new_content, "base64").toString("utf8") : null;
     const molden = payload.molden ? Buffer.from(payload.molden, "base64").toString("utf8") : null;
 
-    payload.new_content = `${content.length} Bytes`;
-    payload.molden = `${molden.length} Bytes`;
+    payload.new_content = content ? `${content.length} Bytes` : null;
+    payload.molden = molden ? `${molden.length} Bytes` : null;
 
     logger.info("Received job status report", {structuredData: true, payload});
 
