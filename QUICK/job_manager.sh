@@ -23,6 +23,7 @@ if [[ ! -w "${SHARED_DIR}" ]]; then
 fi
 
 LOG_FILE="$SHARED_DIR/job_manager.log"
+OFFSET_FILE="${SHARED_DIR}/.last_offset"
 
 # Logging function
 log_message() {
@@ -54,9 +55,16 @@ STATUS_CHECK_INTERVAL="${STATUS_CHECK_INTERVAL:-$DEFAULT_STATUS_CHECK_INTERVAL}"
 JOB_ASSIGNMENT_ENDPOINT="${API_URL_JOB_ASSIGNMENT}"
 STATUS_REPORT_ENDPOINT="${API_URL_STATUS_REPORT}"
 
+# Initialize offset tracking for a new job
+initialize_offset_tracking() {
+    local file_key="$1"
+    touch "$OFFSET_FILE"
+    echo "${file_key}:0" >> "$OFFSET_FILE"
+    log_message "Initialized offset tracking for $file_key"
+}
+
 # Function to report status
 report_status() {
-    local offset_file="${SHARED_DIR}/.last_offset"
     local processed_dir="${SHARED_DIR}/.processed"
     
     # Ensure processed directory exists
@@ -72,6 +80,11 @@ report_status() {
         local output_file="${SHARED_DIR}/${base_name}.out"
         local file_key="${base_name}.out"
         
+        # Initialize offset tracking if it doesn't exist for this file
+        if ! grep -q "^${file_key}:" "$OFFSET_FILE" 2>/dev/null; then
+            initialize_offset_tracking "$file_key"
+        fi
+        
         # Determine status
         local status
         if pgrep -x "$APP_EXECUTABLE" > /dev/null; then
@@ -84,8 +97,8 @@ report_status() {
         
         # Get last reported offset
         local last_offset=0
-        if [[ -f "${offset_file}" ]]; then
-            last_offset=$(grep "^${file_key}:" "${offset_file}" | cut -d':' -f2 || echo "0")
+        if [[ -f "${OFFSET_FILE}" ]]; then
+            last_offset=$(grep "^${file_key}:" "${OFFSET_FILE}" | cut -d':' -f2 || echo "0")
         fi
         
         # Get new content if file exists
@@ -118,14 +131,14 @@ EOF
         if [[ "$response_code" == "204" ]]; then
             # Update offset file if still running
             if [[ "$status" == "RUNNING" ]]; then
-                sed -i.bak "/^${file_key}:/d" "${offset_file}"
-                echo "${file_key}:${current_offset}" >> "${offset_file}"
+                sed -i.bak "/^${file_key}:/d" "${OFFSET_FILE}"
+                echo "${file_key}:${current_offset}" >> "${OFFSET_FILE}"
             else
                 # Move files to processed directory and cleanup
                 mv "$input_file" "$processed_dir/"
                 [[ -f "$output_file" ]] && mv "$output_file" "$processed_dir/"
-                sed -i.bak "/^${file_key}:/d" "${offset_file}"
-                rm -f "${offset_file}.bak"
+                sed -i.bak "/^${file_key}:/d" "${OFFSET_FILE}"
+                rm -f "${OFFSET_FILE}.bak"
             fi
             
             log_message "Successfully reported status $status for $file_key"
@@ -156,8 +169,9 @@ fetch_new_job() {
         input_file="$SHARED_DIR/$file_name"
         echo "$job_spec" > "$input_file"
 
-        # start the execution of the job
-        # mpirun --allow-run-as-root -np 1 quick.cuda.MPI /mnt/shared-disk/water.in >> /mnt/shared-disk/job_manager.log 2>&1 &
+        # Initialize offset tracking for the new job
+        initialize_offset_tracking "${file_name%.*}.out"
+        
         log_message "Starting job execution"
 
         # Start the job in the background

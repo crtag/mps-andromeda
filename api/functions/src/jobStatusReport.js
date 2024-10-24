@@ -33,6 +33,9 @@ exports.handler = onRequest((req, res) => {
         return;
     }
 
+    // content is incoming in base64 encoding, decode it
+    payload.new_content = Buffer.from(payload.new_content, "base64").toString("utf8");
+
     logger.info("Received job status report", {structuredData: true, payload});
 
     res.status(204);
