@@ -8,13 +8,15 @@ const {logger} = require("firebase-functions");
     "filename": "$file_key",
     "status": "$status",
     "new_content": "$new_lines",
-    "offset": $current_offset
+    "offset": $current_offset,
+    "molden": "$molden"
  }
  * Where
  * status is one of "RUNNING", "ENDED", "FAILED"
  * filename is the name of the file without the extension
  * new_content is the new content to be appended to the result file
  * offset is the current offset of the file, ie line number to consider when appending new content
+ * molden is the optional content of the molden file submitted once after the job ENDED
  */
 exports.handler = onRequest((req, res) => {
     if (req.method !== "POST") {
@@ -34,7 +36,11 @@ exports.handler = onRequest((req, res) => {
     }
 
     // content is incoming in base64 encoding, decode it
-    payload.new_content = Buffer.from(payload.new_content, "base64").toString("utf8");
+    const content = payload.new_content ? Buffer.from(payload.new_content, "base64").toString("utf8") : null;
+    const molden = payload.molden ? Buffer.from(payload.molden, "base64").toString("utf8") : null;
+
+    payload.new_content = `${content.length} Bytes`;
+    payload.molden = `${molden.length} Bytes`;
 
     logger.info("Received job status report", {structuredData: true, payload});
 
