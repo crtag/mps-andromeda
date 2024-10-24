@@ -116,8 +116,9 @@ report_status() {
         # Prepare and send report
         local response_code
         
-        if [[ -n "$molden_content" ]]; then
+        if [[ -f "$molden_file" ]]; then
             # Report with molden file
+            molden_content=$(base64 "$molden_file")
             response_code=$(curl -s -w "%{http_code}" -o /dev/null \
                 -X POST "${STATUS_REPORT_ENDPOINT}" \
                 -H "Content-Type: application/json" \
@@ -127,7 +128,7 @@ report_status() {
             "status": "$status",
             "new_content": "$new_lines",
             "offset": $current_offset,
-            "molden_file": "$molden_content"
+            "molden": "$molden_content"
         }
 EOF
         )
@@ -198,6 +199,8 @@ fetch_new_job() {
         # Start the job in the background
         mpirun --allow-run-as-root -np 1 "$APP_EXECUTABLE" "$input_file" >> "$LOG_FILE" 2>&1 &
         pid=$!
+
+        disown $pid
 
         log_message "Job started with PID: $pid"
 
