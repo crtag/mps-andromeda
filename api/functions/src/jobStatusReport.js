@@ -28,7 +28,7 @@ async function appendToResultFile(filenameKey, content, offset) {
             existingContent = await getJobFile(`${filenameKey}.out`, "result");
         } catch (error) {
             // File might not exist yet, which is fine
-            if (error.message !== "File not found") {
+            if (!error?.message.startsWith("File not found")) {
                 throw error;
             }
         }
