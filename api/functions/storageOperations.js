@@ -91,7 +91,7 @@ async function getJobFile(filename, type) {
 
         switch (type) {
         case "spec":
-            fullPath = `${JOBS_PREFIX}${filename}`;
+            fullPath = `${JOBS_PREFIX}${filename}.in`;
             break;
         case "result":
             fullPath = `${RESULTS_PREFIX}${filename}.out`;
@@ -139,7 +139,7 @@ async function saveJobFile(filename, content, type, metadata = {}) {
 
 async function updateJobStatus(filename, status, additionalMetadata = {}) {
     try {
-        const fullPath = `${JOBS_PREFIX}${filename}.in`;
+        const fullPath = `${JOBS_PREFIX}${filename}`;
         const file = getBucket().file(fullPath);
         const [exists] = await file.exists();
         if (!exists) {
@@ -163,11 +163,11 @@ async function updateJobStatus(filename, status, additionalMetadata = {}) {
 
 async function moveJobToResults(filename) {
     try {
-        const sourcePath = `${JOBS_PREFIX}${filename}.in`;
+        const sourcePath = `${JOBS_PREFIX}${filename}`;
         const sourceFile = getBucket().file(sourcePath);
 
         // First, copy the spec file to results
-        await sourceFile.copy(`${RESULTS_PREFIX}${filename}.in`);
+        await sourceFile.copy(`${RESULTS_PREFIX}${filename}`);
         // Then delete the original
         await sourceFile.delete();
 

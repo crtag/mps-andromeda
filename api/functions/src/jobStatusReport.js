@@ -7,17 +7,17 @@ const {
     getJobFile,
 } = require("../storageOperations");
 
-async function handleJobCompletion(filename, moldenContent = null) {
+async function handleJobCompletion(filenameKey, moldenContent = null) {
     // Save molden file if provided
     if (moldenContent) {
-        await saveJobFile(`${filename}.molden`, moldenContent, "result");
+        await saveJobFile(`${filenameKey}.molden`, moldenContent, "result");
     }
 
     // Update status and move job spec to results, in this order
-    await updateJobStatus(filename, "ENDED", {
+    await updateJobStatus(`${filenameKey}.in`, "ENDED", {
         completionTime: new Date().toISOString(),
     });
-    await moveJobToResults(filename);
+    await moveJobToResults(`${filenameKey}.in`);
 }
 
 async function appendToResultFile(filename, content, offset) {
