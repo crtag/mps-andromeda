@@ -20,12 +20,12 @@ async function handleJobCompletion(filenameKey, moldenContent = null) {
     await moveJobToResults(`${filenameKey}.in`);
 }
 
-async function appendToResultFile(filename, content, offset) {
+async function appendToResultFile(filenameKey, content, offset) {
     try {
         // Get existing content if any
         let existingContent = "";
         try {
-            existingContent = await getJobFile(`${filename}.out`, "result");
+            existingContent = await getJobFile(`${filenameKey}.out`, "result");
         } catch (error) {
             // File might not exist yet, which is fine
             if (error.message !== "File not found") {
@@ -48,7 +48,7 @@ async function appendToResultFile(filename, content, offset) {
         }
 
         // Save updated content
-        await saveJobFile(`${filename}.out`, lines.join("\n"), "result");
+        await saveJobFile(`${filenameKey}.out`, lines.join("\n"), "result");
         return true;
     } catch (error) {
         logger.error("Error appending to result file", error);
@@ -81,8 +81,6 @@ exports.handler = onRequest(async (req, res) => {
             Buffer.from(payload.molden, "base64").toString("utf8") :
             null;
 
-        // IMPORTANT! filename comes without an extension
-
         // Log the operation
         logger.info("Processing job status report", {
             structuredData: true,
@@ -92,17 +90,20 @@ exports.handler = onRequest(async (req, res) => {
             moldenSize: molden ? molden.length : 0,
         });
 
+        // IMPORTANT! filename comes without an extension
+        const filenameKey = payload.filename;
+
         // Handle content update if present
         if (content) {
-            await appendToResultFile(payload.filename, content, payload.offset);
-            await updateJobStatus(payload.filename, payload.status, {
+            await appendToResultFile(filenameKey, content, payload.offset);
+            await updateJobStatus(`${filenameKey}.in`, payload.status, {
                 lastUpdate: new Date().toISOString(),
             });
         }
 
         // Handle job completion
         if (payload.status === "ENDED") {
-            await handleJobCompletion(payload.filename, molden);
+            await handleJobCompletion(filenameKey, molden);
         }
 
         res.status(204).send();

@@ -88,16 +88,14 @@ async function listCompletedJobs(limit = 10) {
 async function getJobFile(filename, type) {
     try {
         let fullPath;
+        // the type dictates the prefix, two options are "spec" and "result"
 
         switch (type) {
         case "spec":
-            fullPath = `${JOBS_PREFIX}${filename}.in`;
+            fullPath = `${JOBS_PREFIX}${filename}`;
             break;
         case "result":
-            fullPath = `${RESULTS_PREFIX}${filename}.out`;
-            break;
-        case "molden":
-            fullPath = `${RESULTS_PREFIX}${filename}.molden`;
+            fullPath = `${RESULTS_PREFIX}${filename}`;
             break;
         default:
             throw new Error("Invalid file type");
@@ -106,7 +104,7 @@ async function getJobFile(filename, type) {
         const file = getBucket().file(fullPath);
         const [exists] = await file.exists();
         if (!exists) {
-            throw new Error("File not found");
+            throw new Error(`File not found [${fullPath}]`);
         }
 
         const [content] = await file.download();
@@ -143,7 +141,7 @@ async function updateJobStatus(filename, status, additionalMetadata = {}) {
         const file = getBucket().file(fullPath);
         const [exists] = await file.exists();
         if (!exists) {
-            throw new Error("Job spec not found");
+            throw new Error(`Job spec not found, [${fullPath}]`);
         }
 
         const [metadata] = await file.getMetadata();
