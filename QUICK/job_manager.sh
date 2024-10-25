@@ -124,7 +124,7 @@ report_status() {
                 -H "Content-Type: application/json" \
                 -d @- << EOF
         {
-            "filename": "$file_key",
+            "filename": "$base_name",
             "status": "$status",
             "new_content": "$new_lines",
             "offset": $current_offset,
@@ -139,7 +139,7 @@ EOF
                 -H "Content-Type: application/json" \
                 -d @- << EOF
         {
-            "filename": "$file_key",
+            "filename": "$base_name",
             "status": "$status",
             "new_content": "$new_lines",
             "offset": $current_offset

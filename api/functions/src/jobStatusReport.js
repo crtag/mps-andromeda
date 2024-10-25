@@ -1,11 +1,60 @@
-// jobStatusReport.js
 const {onRequest} = require("firebase-functions/v2/https");
 const {logger} = require("firebase-functions");
 const {
-    appendToResultFile,
-    saveMoldenFile,
-    deleteJobSpec,
-} = require("./storageOperations");
+    saveJobFile,
+    updateJobStatus,
+    moveJobToResults,
+    getJobFile,
+} = require("../storageOperations");
+
+async function handleJobCompletion(filename, moldenContent = null) {
+    // Save molden file if provided
+    if (moldenContent) {
+        await saveJobFile(`${filename}.molden`, moldenContent, "result");
+    }
+
+    // Update status and move job spec to results, in this order
+    await updateJobStatus(filename, "ENDED", {
+        completionTime: new Date().toISOString(),
+    });
+    await moveJobToResults(filename);
+}
+
+async function appendToResultFile(filename, content, offset) {
+    try {
+        // Get existing content if any
+        let existingContent = "";
+        try {
+            existingContent = await getJobFile(`${filename}.out`, "result");
+        } catch (error) {
+            // File might not exist yet, which is fine
+            if (error.message !== "File not found") {
+                throw error;
+            }
+        }
+
+        // Split content into lines and handle offset
+        const lines = existingContent ? existingContent.split("\n") : [];
+        const newLines = content.split("\n");
+
+        // Pad with empty lines if needed
+        while (lines.length < offset) {
+            lines.push("");
+        }
+
+        // Add new lines at offset
+        for (let i = 0; i < newLines.length; i++) {
+            lines[offset + i] = newLines[i];
+        }
+
+        // Save updated content
+        await saveJobFile(`${filename}.out`, lines.join("\n"), "result");
+        return true;
+    } catch (error) {
+        logger.error("Error appending to result file", error);
+        throw error;
+    }
+}
 
 exports.handler = onRequest(async (req, res) => {
     if (req.method !== "POST") {
@@ -32,8 +81,10 @@ exports.handler = onRequest(async (req, res) => {
             Buffer.from(payload.molden, "base64").toString("utf8") :
             null;
 
+        // IMPORTANT! filename comes without an extension
+
         // Log the operation
-        logger.info("Processing job status report (modified for clarity)", {
+        logger.info("Processing job status report", {
             structuredData: true,
             filename: payload.filename,
             status: payload.status,
@@ -44,16 +95,14 @@ exports.handler = onRequest(async (req, res) => {
         // Handle content update if present
         if (content) {
             await appendToResultFile(payload.filename, content, payload.offset);
+            await updateJobStatus(payload.filename, payload.status, {
+                lastUpdate: new Date().toISOString(),
+            });
         }
 
         // Handle job completion
         if (payload.status === "ENDED") {
-            // Save molden file if provided
-            if (molden) {
-                await saveMoldenFile(payload.filename, molden);
-            }
-            // Delete job spec file
-            await deleteJobSpec(payload.filename);
+            await handleJobCompletion(payload.filename, molden);
         }
 
         res.status(204).send();
