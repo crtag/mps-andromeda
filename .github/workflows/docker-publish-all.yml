@@ -1,0 +1,93 @@
+name: Publish QUICK Docker Images
+
+on:
+  push:
+    paths:
+      - "QUICK/**"  # Trigger only if there are changes in the QUICK folder
+    tags:
+      - "docker-v*-v*"   # Trigger only if a tag with the format "docker-vX.X.X-vY.Y.Y" is pushed
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to use for manual trigger (e.g., docker-v1.0.1-v2.0.0)"
+        required: true
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    env:
+      DOCKER_IMAGE_NAME1: crtag/quick-app 
+      DOCKER_IMAGE_NAME2: crtag/quick-app-managed 
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Check for changes in QUICK folder
+        id: check_folder_changes
+        run: |
+          # Skip check if triggered manually
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "Manual trigger detected; skipping QUICK folder change check."
+            exit 0
+          fi
+
+          # Use fallback if HEAD~1 is ambiguous (e.g., first commit or tag)
+          if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          else
+            CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD)
+          fi
+          
+          if [[ -z "$(echo "$CHANGED_FILES" | grep QUICK/)" ]]; then
+            echo "No relevant changes in QUICK folder; stopping workflow."
+            exit 1
+          fi
+
+      # Extract versions based on trigger type
+      - name: Extract versions from tag
+        if: github.event_name == 'workflow_dispatch' || steps.check_folder_changes.outcome == 'success'
+        id: extract_versions
+        run: |
+          # For manual triggers, use the provided input tag
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TAG_NAME="${{ github.event.inputs.tag }}"
+          else
+            TAG_NAME="${GITHUB_REF##*/}"
+          fi
+
+          VERSION1=$(echo "$TAG_NAME" | sed -n 's/docker-v\([0-9.]*\)-v[0-9.]*$/\1/p')
+          VERSION2=$(echo "$TAG_NAME" | sed -n 's/docker-v[0-9.]*-v\([0-9.]*\)$/\1/p')
+
+          if [[ -z "$VERSION1" || -z "$VERSION2" ]]; then
+            echo "Error: Could not extract versions from tag. Ensure the tag format is docker-vX.X.X-vY.Y.Y."
+            exit 1
+          fi
+
+          echo "DOCKER_IMAGE_VERSION1=$VERSION1" >> $GITHUB_ENV
+          echo "DOCKER_IMAGE_VERSION2=$VERSION2" >> $GITHUB_ENV
+
+      # Log in to Docker Hub
+      - name: Log in to Docker Hub
+        if: steps.extract_versions.outcome == 'success'
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Build and push Image 1 with extracted version
+      - name: Build and push Image 1
+        if: steps.extract_versions.outcome == 'success'
+        run: |
+          docker build -t $DOCKER_IMAGE_NAME1:${{ env.DOCKER_IMAGE_VERSION1 }} -t $DOCKER_IMAGE_NAME1:latest -f QUICK/Dockerfile .
+          docker push $DOCKER_IMAGE_NAME1:${{ env.DOCKER_IMAGE_VERSION1 }}
+          docker push $DOCKER_IMAGE_NAME1:latest
+
+      # Build and push Image 2 with extracted version
+      - name: Build and push Image 2
+        if: steps.extract_versions.outcome == 'success'
+        run: |
+          docker build -t $DOCKER_IMAGE_NAME2:${{ env.DOCKER_IMAGE_VERSION2 }} -t $DOCKER_IMAGE_NAME2:latest -f QUICK/Dockerfile.managed .
+          docker push $DOCKER_IMAGE_NAME2:${{ env.DOCKER_IMAGE_VERSION2 }}
+          docker push $DOCKER_IMAGE_NAME2:latest

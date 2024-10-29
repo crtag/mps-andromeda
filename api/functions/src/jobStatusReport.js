@@ -30,24 +30,21 @@ async function appendToResultFile(filenameKey, content, offset) {
             // File might not exist yet, which is fine
             if (!error?.message.startsWith("File not found")) {
                 throw error;
+            } else {
+                logger.info("Result file not found, this is likely the first append");
             }
         }
 
-        // Split content into lines and handle offset
+        // Split existing content and new content into lines
         const lines = existingContent ? existingContent.split("\n") : [];
         const newLines = content.split("\n");
 
-        // Pad with empty lines if needed
-        while (lines.length < offset) {
-            lines.push("");
-        }
-
-        // Add new lines at offset
+        // Append or replace lines starting at the specified offset
         for (let i = 0; i < newLines.length; i++) {
             lines[offset + i] = newLines[i];
         }
 
-        // Save updated content
+        // Save the updated content
         await saveJobFile(`${filenameKey}.out`, lines.join("\n"), "result");
         return true;
     } catch (error) {
@@ -85,6 +82,7 @@ exports.handler = onRequest(async (req, res) => {
         logger.info("Processing job status report", {
             structuredData: true,
             filename: payload.filename,
+            offset: payload.offset,
             status: payload.status,
             contentSize: content ? content.length : 0,
             moldenSize: molden ? molden.length : 0,

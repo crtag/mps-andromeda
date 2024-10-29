@@ -1,0 +1,50 @@
+name: Manually Publish Managed QUICK Docker Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to use, eg docker-v1.0.1"
+        required: true
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    env:
+      DOCKER_IMAGE_NAME: crtag/quick-app-managed 
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Extract version
+      - name: Extract version from tag
+        if: github.event_name == 'workflow_dispatch'
+        id: extract_version
+        run: |
+          TAG_NAME="${{ github.event.inputs.tag }}"
+          VERSION=$(echo "$TAG_NAME" | sed -n 's/docker-v\([0-9.]*\)$/\1/p')
+
+          if [[ -z "$VERSION" ]]; then
+            echo "Error: Could not extract version from tag. Ensure the tag format is `docker-vX.X.X`"
+            exit 1
+          fi
+
+          echo "DOCKER_IMAGE_VERSION=$VERSION" >> $GITHUB_ENV
+
+      # Log in to Docker Hub
+      - name: Log in to Docker Hub
+        if: steps.extract_version.outcome == 'success'
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Build and push image with extracted version
+      - name: Build and push image
+        if: steps.extract_version.outcome == 'success'
+        run: |
+          docker build -t $DOCKER_IMAGE_NAME1:${{ env.DOCKER_IMAGE_VERSION }} -t $DOCKER_IMAGE_NAME:latest -f QUICK/Dockerfile.managed .
+          docker push $DOCKER_IMAGE_NAME:${{ env.DOCKER_IMAGE_VERSION }}
+          docker push $DOCKER_IMAGE_NAME:latest
