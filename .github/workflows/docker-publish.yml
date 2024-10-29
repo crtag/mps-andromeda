@@ -33,7 +33,7 @@ jobs:
             exit 0
           fi
 
-          # Use fallback if HEAD^ is ambiguous (e.g., first commit or tag)
+          # Use fallback if HEAD~1 is ambiguous (e.g., first commit or tag)
           if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
             CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
           else
@@ -45,29 +45,18 @@ jobs:
             exit 1
           fi
 
-      # Step to extract version from the manual trigger input
-      - name: Extract versions from manual trigger input
-        if: github.event_name == 'workflow_dispatch'
-        id: extract_manual_versions
+      # Extract versions based on trigger type
+      - name: Extract versions from tag
+        if: github.event_name == 'workflow_dispatch' || steps.check_folder_changes.outcome == 'success'
+        id: extract_versions
         run: |
-          TAG_NAME="${{ github.event.inputs.tag }}"
-          VERSION1=$(echo "$TAG_NAME" | sed -n 's/docker-v\([0-9.]*\)-v[0-9.]*$/\1/p')
-          VERSION2=$(echo "$TAG_NAME" | sed -n 's/docker-v[0-9.]*-v\([0-9.]*\)$/\1/p')
-
-          if [[ -z "$VERSION1" || -z "$VERSION2" ]]; then
-            echo "Error: Could not extract versions from the manual entry. Ensure the tag format is docker-vX.X.X-vY.Y.Y."
-            exit 1
+          # For manual triggers, use the provided input tag
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TAG_NAME="${{ github.event.inputs.tag }}"
+          else
+            TAG_NAME="${GITHUB_REF##*/}"
           fi
 
-          echo "DOCKER_IMAGE_VERSION1=$VERSION1" >> $GITHUB_ENV
-          echo "DOCKER_IMAGE_VERSION2=$VERSION2" >> $GITHUB_ENV
-
-      # Step to extract versions from the tag
-      - name: Extract versions from tag
-        if: steps.check_folder_changes.outcome == 'success'
-        id: extract_push_tag_versions
-        run: |
-          TAG_NAME="${GITHUB_REF##*/}"
           VERSION1=$(echo "$TAG_NAME" | sed -n 's/docker-v\([0-9.]*\)-v[0-9.]*$/\1/p')
           VERSION2=$(echo "$TAG_NAME" | sed -n 's/docker-v[0-9.]*-v\([0-9.]*\)$/\1/p')
 
@@ -81,7 +70,7 @@ jobs:
 
       # Log in to Docker Hub
       - name: Log in to Docker Hub
-        if: steps.extract_push_tag_versions.outcome == 'success' || steps.extract_manual_versions.outcome == 'success'
+        if: steps.extract_versions.outcome == 'success'
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -89,7 +78,7 @@ jobs:
 
       # Build and push Image 1 with extracted version
       - name: Build and push Image 1
-        if: steps.extract_push_tag_versions.outcome == 'success' || steps.extract_manual_versions.outcome == 'success'
+        if: steps.extract_versions.outcome == 'success'
         run: |
           docker build -t $DOCKER_IMAGE_NAME1:${{ env.DOCKER_IMAGE_VERSION1 }} -t $DOCKER_IMAGE_NAME1:latest -f QUICK/Dockerfile .
           docker push $DOCKER_IMAGE_NAME1:${{ env.DOCKER_IMAGE_VERSION1 }}
@@ -97,7 +86,7 @@ jobs:
 
       # Build and push Image 2 with extracted version
       - name: Build and push Image 2
-        if: steps.extract_push_tag_versions.outcome == 'success' || steps.extract_manual_versions.outcome == 'success'
+        if: steps.extract_versions.outcome == 'success'
         run: |
           docker build -t $DOCKER_IMAGE_NAME2:${{ env.DOCKER_IMAGE_VERSION2 }} -t $DOCKER_IMAGE_NAME2:latest -f QUICK/Dockerfile.managed .
           docker push $DOCKER_IMAGE_NAME2:${{ env.DOCKER_IMAGE_VERSION2 }}
