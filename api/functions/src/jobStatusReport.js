@@ -30,6 +30,8 @@ async function appendToResultFile(filenameKey, content, offset) {
             // File might not exist yet, which is fine
             if (!error?.message.startsWith("File not found")) {
                 throw error;
+            } else {
+                logger.info("Result file not found, this is likely the first append");
             }
         }
 
@@ -85,6 +87,7 @@ exports.handler = onRequest(async (req, res) => {
         logger.info("Processing job status report", {
             structuredData: true,
             filename: payload.filename,
+            offset: payload.offset,
             status: payload.status,
             contentSize: content ? content.length : 0,
             moldenSize: molden ? molden.length : 0,

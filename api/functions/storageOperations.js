@@ -110,7 +110,7 @@ async function getJobFile(filename, type) {
         const [content] = await file.download();
         return content.toString("utf8");
     } catch (error) {
-        logger.error("Error getting job file", error);
+        logger.warn("Error getting job file", error);
         throw error;
     }
 }
