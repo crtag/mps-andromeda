@@ -35,21 +35,16 @@ async function appendToResultFile(filenameKey, content, offset) {
             }
         }
 
-        // Split content into lines and handle offset
+        // Split existing content and new content into lines
         const lines = existingContent ? existingContent.split("\n") : [];
         const newLines = content.split("\n");
 
-        // Pad with empty lines if needed
-        while (lines.length < offset) {
-            lines.push("");
-        }
-
-        // Add new lines at offset
+        // Append or replace lines starting at the specified offset
         for (let i = 0; i < newLines.length; i++) {
             lines[offset + i] = newLines[i];
         }
 
-        // Save updated content
+        // Save the updated content
         await saveJobFile(`${filenameKey}.out`, lines.join("\n"), "result");
         return true;
     } catch (error) {

@@ -123,6 +123,7 @@ async function saveJobFile(filename, content, type, metadata = {}) {
 
         await file.save(content, {
             metadata: {
+                contentType: "text/plain",
                 ...metadata,
                 timestamp: new Date().toISOString(),
             },
