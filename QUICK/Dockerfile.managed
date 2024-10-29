@@ -13,7 +13,7 @@ RUN apt-get update -y \
 WORKDIR /src/install
 
 # Copy the job management script from the local context into the container
-COPY job_manager.sh /src/install/job_manager.sh
+COPY QUICK/job_manager.sh /src/install/job_manager.sh
 
 # Make the script executable
 RUN chmod +x /src/install/job_manager.sh
