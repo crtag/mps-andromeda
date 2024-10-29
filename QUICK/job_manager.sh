@@ -127,7 +127,7 @@ report_status() {
             "filename": "$base_name",
             "status": "$status",
             "new_content": "$new_lines",
-            "offset": $current_offset,
+            "offset": $last_offset,
             "molden": "$molden_content"
         }
 EOF
@@ -142,7 +142,7 @@ EOF
             "filename": "$base_name",
             "status": "$status",
             "new_content": "$new_lines",
-            "offset": $current_offset
+            "offset": $last_offset
         }
 EOF
         )
