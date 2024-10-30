@@ -27,7 +27,7 @@ async function validateJobSpec(content) {
     };
 }
 
-exports.listPendingJobsHandler = onRequest(async (req, res) => {
+exports.listPendingJobsHandler = onRequest({cors: true}, async (req, res) => {
     if (req.method !== "GET") {
         res.status(405).send("Method Not Allowed");
         return;
@@ -42,7 +42,7 @@ exports.listPendingJobsHandler = onRequest(async (req, res) => {
     }
 });
 
-exports.listCompletedJobsHandler = onRequest(async (req, res) => {
+exports.listCompletedJobsHandler = onRequest({cors: true}, async (req, res) => {
     if (req.method !== "GET") {
         res.status(405).send("Method Not Allowed");
         return;
@@ -58,7 +58,7 @@ exports.listCompletedJobsHandler = onRequest(async (req, res) => {
     }
 });
 
-exports.getJobFileHandler = onRequest(async (req, res) => {
+exports.getJobFileHandler = onRequest({cors: true}, async (req, res) => {
     if (req.method !== "GET") {
         res.status(405).send("Method Not Allowed");
         return;
@@ -80,7 +80,7 @@ exports.getJobFileHandler = onRequest(async (req, res) => {
     }
 });
 
-exports.uploadJobSpecHandler = onRequest(async (req, res) => {
+exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
     if (req.method !== "POST") {
         res.status(405).send("Method Not Allowed");
         return;

@@ -53,7 +53,7 @@ async function appendToResultFile(filenameKey, content, offset) {
     }
 }
 
-exports.handler = onRequest(async (req, res) => {
+exports.handler = onRequest({cors: true}, async (req, res) => {
     if (req.method !== "POST") {
         res.status(405).send("Method Not Allowed");
         return;

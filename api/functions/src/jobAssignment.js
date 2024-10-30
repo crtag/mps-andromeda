@@ -29,7 +29,7 @@ async function getMostRecentPendingJob() {
     }
 }
 
-exports.handler = onRequest(async (req, res) => {
+exports.handler = onRequest({cors: true}, async (req, res) => {
     if (req.method !== "GET") {
         res.status(405).send("Method Not Allowed");
         return;
