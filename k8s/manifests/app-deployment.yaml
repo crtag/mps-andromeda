@@ -14,9 +14,30 @@ spec:
       labels:
         app: quick-app
     spec:
+      restartPolicy: Always  # Default value, but explicitly stated
       containers:
       - name: quick-app
         image: crtag/quick-app-managed:latest
+        # Add liveness probe to detect and restart unhealthy containers
+        livenessProbe:
+          exec:
+            command:
+            - /bin/bash
+            - -c
+            - >
+              pgrep quick.cuda.MPI | xargs -I {} ps -o state= -p {} | grep -vq '^Z'
+          initialDelaySeconds: 30
+          periodSeconds: 60
+        # Add readiness probe
+        readinessProbe:
+          exec:
+            command:
+            - /bin/bash
+            - -c
+            - >
+              ! pgrep -x quick.cuda.MPI || 
+              (pgrep quick.cuda.MPI | xargs -I {} ps -o state= -p {} | grep -vq '^Z')
+          periodSeconds: 10
         env:
         - name: API_URL_JOB_ASSIGNMENT
           valueFrom:
