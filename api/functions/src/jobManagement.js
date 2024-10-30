@@ -72,6 +72,8 @@ exports.getJobFileHandler = onRequest({cors: true}, async (req, res) => {
         }
 
         const content = await getJobFile(filename, type);
+        // force download headers
+        res.set("Content-Disposition", `attachment; filename="${filename}"`);
         res.status(200).send(content);
     } catch (error) {
         logger.error("Error getting job file", error);

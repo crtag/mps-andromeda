@@ -145,7 +145,7 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
     list.innerHTML = jobs.map(job => {
         const links = getDownloadLinks(job, isCompleted);
         const linksHtml = links.map(link => 
-            `<a href="${link.url}" download>${link.text}</a>`
+            `<a href="${link.url}" download target="_blank">${link.text}</a>`
         ).join('');
 
         return `
