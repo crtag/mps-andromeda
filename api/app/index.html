@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        .drop-zone {
+            width: 100%;
+            max-width: 400px;
+            height: 200px;
+            padding: 25px;
+            border: 2px dashed #ccc;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-family: Arial, sans-serif;
+            cursor: pointer;
+            transition: border .3s ease;
+        }
+
+        .drop-zone.drag-over {
+            border-color: #000;
+            background: #f7f7f7;
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .error { background: #ffe6e6; }
+        .success { background: #e6ffe6; }
+    </style>
+</head>
+<body>
+    <div id="drop-zone" class="drop-zone">
+        Drag and drop job spec file here or click to browse
+        <input type="file" id="fileInput" hidden accept=".in">
+    </div>
+    <div id="status" class="status" style="display: none;"></div>
+
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('fileInput');
+        const status = document.getElementById('status');
+        const UPLOAD_ENDPOINT = 'https://uploadjobspec-poloq3qrtq-uc.a.run.app';
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight);
+        });
+
+        function highlight() {
+            dropZone.classList.add('drag-over');
+        }
+
+        function unhighlight() {
+            dropZone.classList.remove('drag-over');
+        }
+
+        dropZone.addEventListener('drop', handleDrop);
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', handleFileSelect);
+
+        function handleDrop(e) {
+            const file = e.dataTransfer.files[0];
+            handleFile(file);
+        }
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            handleFile(file);
+        }
+
+        function handleFile(file) {
+            if (!file.name.endsWith('.in')) {
+                showStatus('Please upload a file with .in extension', 'error');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const content = e.target.result;
+                await uploadFile(file.name, content);
+            };
+            reader.readAsText(file);
+        }
+
+        async function uploadFile(filename, content) {
+            try {
+                showStatus('Uploading...', '');
+                const response = await fetch(UPLOAD_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ filename, content })
+                });
+
+                const data = await response.json();
+                
+                if (!response.ok) throw new Error(data.message || 'Upload failed');
+                
+                showStatus(`Upload successful: ${data.filename}`, 'success');
+                fileInput.value = ''; // Reset file input
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        function showStatus(message, type) {
+            status.textContent = message;
+            status.style.display = 'block';
+            status.className = 'status' + (type ? ` ${type}` : '');
+        }
+    </script>
+</body>
+</html>

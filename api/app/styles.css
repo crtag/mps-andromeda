@@ -1,0 +1,53 @@
+/* Base layout */
+main {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+section {
+    margin-bottom: 2rem;
+}
+
+/* Upload component */
+.drop-zone {
+    width: 100%;
+    max-width: 400px;
+    height: 200px;
+    padding: 25px;
+    border: 2px dashed #ccc;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    cursor: pointer;
+    transition: border .3s ease;
+}
+
+.drop-zone.drag-over {
+    border-color: #000;
+    background: #f7f7f7;
+}
+
+.status {
+    margin-top: 20px;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+.status.error { 
+    background: #ffe6e6; 
+}
+
+.status.success { 
+    background: #e6ffe6; 
+}
+
+/* Jobs lists - basic structure for future components */
+.jobs-list {
+    border: 1px solid #eee;
+    border-radius: 4px;
+    min-height: 50px;
+    margin-top: 10px;
+}
