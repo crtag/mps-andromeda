@@ -1,13 +1,13 @@
 // Constants
 const API = {
     UPLOAD: 'https://uploadjobspec-poloq3qrtq-uc.a.run.app',
-    // Placeholder for future endpoints
     JOBS: {
-        PENDING: null,
-        RUNNING: null,
+        PENDING_RUNNING: 'https://listpendingjobs-poloq3qrtq-uc.a.run.app',
         COMPLETED: null
     }
 };
+
+const REFRESH_INTERVAL = 10000; // 10 seconds
 
 // DOM Elements
 const elements = {
@@ -104,5 +104,55 @@ function showStatus(message, type) {
     elements.status.className = 'status' + (type ? ` ${type}` : '');
 }
 
+// Jobs Management
+async function fetchJobs() {
+    try {
+        const response = await fetch(API.JOBS.PENDING_RUNNING);
+        if (!response.ok) throw new Error('Failed to fetch jobs');
+        const jobs = await response.json();
+        
+        const pending = jobs.filter(job => job.status === 'PENDING');
+        const running = jobs.filter(job => job.status === 'RUNNING');
+        
+        updateJobsList('pending-jobs', pending);
+        updateJobsList('running-jobs', running);
+    } catch (error) {
+        console.error('Error fetching jobs:', error);
+    }
+}
+
+function updateJobsList(sectionId, jobs) {
+    const section = document.getElementById(sectionId);
+    const list = section.querySelector('.jobs-list');
+    
+    if (jobs.length === 0) {
+        list.innerHTML = '<div class="no-jobs">No jobs</div>';
+        return;
+    }
+
+    list.innerHTML = jobs.map(job => `
+        <div class="job-item">
+            <div class="job-filename">${job.filename}</div>
+            <div class="job-time">
+                Submitted: ${new Date(job.submitTime).toLocaleString()}
+                ${job.lastUpdate ? `<br>Updated: ${new Date(job.lastUpdate).toLocaleString()}` : ''}
+            </div>
+        </div>
+    `).join('');
+}
+
+function startPolling() {
+    // Show sections
+    document.getElementById('pending-jobs').hidden = false;
+    document.getElementById('running-jobs').hidden = false;
+    
+    // Initial fetch
+    fetchJobs();
+    
+    // Start polling
+    setInterval(fetchJobs, REFRESH_INTERVAL);
+}
+
 // Initialize
 initializeUpload();
+startPolling();
