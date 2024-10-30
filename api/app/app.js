@@ -180,6 +180,7 @@ async function uploadFile(filename, content) {
         
         showStatus(`Upload successful: ${data.filename}`, 'success');
         elements.fileInput.value = '';
+        fetchJobs();
     } catch (error) {
         showStatus(`Error: ${error.message}`, 'error');
     }
