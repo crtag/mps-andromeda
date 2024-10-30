@@ -3,11 +3,13 @@ const API = {
     UPLOAD: 'https://uploadjobspec-poloq3qrtq-uc.a.run.app',
     JOBS: {
         PENDING_RUNNING: 'https://listpendingjobs-poloq3qrtq-uc.a.run.app',
-        COMPLETED: null
-    }
+        COMPLETED: 'https://listcompletedjobs-poloq3qrtq-uc.a.run.app'
+    },
+    FILE: 'https://getjobfile-poloq3qrtq-uc.a.run.app'
 };
 
-const REFRESH_INTERVAL = 10000; // 10 seconds
+const REFRESH_INTERVAL = 300000; // 300 seconds
+const COMPLETED_JOBS_LIMIT = 10;
 
 // DOM Elements
 const elements = {
@@ -74,6 +76,92 @@ function handleFile(file) {
     reader.readAsText(file);
 }
 
+// URL Helpers
+function getFileUrl(filename, type) {
+    return `${API.FILE}?filename=${encodeURIComponent(filename)}&type=${type}`;
+}
+
+function getDownloadLinks(job, isComplete) {
+    const baseFilename = job.filename.replace('.in', '');
+    const type = isComplete ? 'result' : 'spec';
+    
+    const links = [];
+    
+    // Add output and molden links only for completed jobs
+    if (isComplete) {
+        links.push({
+            url: getFileUrl(baseFilename + '.out', type),
+            text: 'Output'
+        });
+        links.push({
+            url: getFileUrl(baseFilename + '.molden', type),
+            text: 'Molden'
+        });
+    } else {
+        // Input file link
+        links.push({
+            url: getFileUrl(job.filename, type),
+            text: 'Input'
+        });
+    }
+
+    return links;
+}
+
+// Jobs Management
+async function fetchJobs() {
+    try {
+        // Fetch pending and running jobs
+        const pendingResponse = await fetch(API.JOBS.PENDING_RUNNING);
+        if (!pendingResponse.ok) throw new Error('Failed to fetch pending/running jobs');
+        const activeJobs = await pendingResponse.json();
+        
+        const pending = activeJobs.filter(job => job.status === 'PENDING');
+        const running = activeJobs.filter(job => job.status === 'RUNNING');
+        
+        updateJobsList('pending-jobs', pending);
+        updateJobsList('running-jobs', running);
+
+        // Fetch completed jobs
+        const completedResponse = await fetch(`${API.JOBS.COMPLETED}?limit=${COMPLETED_JOBS_LIMIT}`);
+        if (!completedResponse.ok) throw new Error('Failed to fetch completed jobs');
+        const completed = await completedResponse.json();
+        
+        updateJobsList('completed-jobs', completed, true);
+    } catch (error) {
+        console.error('Error fetching jobs:', error);
+    }
+}
+
+function updateJobsList(sectionId, jobs, isCompleted = false) {
+    const section = document.getElementById(sectionId);
+    const list = section.querySelector('.jobs-list');
+    
+    if (jobs.length === 0) {
+        list.innerHTML = '<div class="no-jobs">No jobs</div>';
+        return;
+    }
+
+    list.innerHTML = jobs.map(job => {
+        const links = getDownloadLinks(job, isCompleted);
+        const linksHtml = links.map(link => 
+            `<a href="${link.url}" download>${link.text}</a>`
+        ).join('');
+
+        return `
+            <div class="job-item">
+                <div class="job-filename">${job.filename}</div>
+                <div class="job-time">
+                    ${isCompleted && job?.completionTime ? `Completed: ${new Date(job.completionTime).toLocaleString()}` : ''}
+                    ${job?.submitTime ? `<br>Submitted: ${new Date(job.submitTime).toLocaleString()}` : ''}
+                    ${job?.lastUpdate ? `<br>Updated: ${new Date(job.lastUpdate).toLocaleString()}` : ''}
+                </div>
+                <div class="job-files">${linksHtml}</div>
+            </div>
+        `;
+    }).join('');
+}
+
 // API Calls
 async function uploadFile(filename, content) {
     try {
@@ -104,47 +192,11 @@ function showStatus(message, type) {
     elements.status.className = 'status' + (type ? ` ${type}` : '');
 }
 
-// Jobs Management
-async function fetchJobs() {
-    try {
-        const response = await fetch(API.JOBS.PENDING_RUNNING);
-        if (!response.ok) throw new Error('Failed to fetch jobs');
-        const jobs = await response.json();
-        
-        const pending = jobs.filter(job => job.status === 'PENDING');
-        const running = jobs.filter(job => job.status === 'RUNNING');
-        
-        updateJobsList('pending-jobs', pending);
-        updateJobsList('running-jobs', running);
-    } catch (error) {
-        console.error('Error fetching jobs:', error);
-    }
-}
-
-function updateJobsList(sectionId, jobs) {
-    const section = document.getElementById(sectionId);
-    const list = section.querySelector('.jobs-list');
-    
-    if (jobs.length === 0) {
-        list.innerHTML = '<div class="no-jobs">No jobs</div>';
-        return;
-    }
-
-    list.innerHTML = jobs.map(job => `
-        <div class="job-item">
-            <div class="job-filename">${job.filename}</div>
-            <div class="job-time">
-                Submitted: ${new Date(job.submitTime).toLocaleString()}
-                ${job.lastUpdate ? `<br>Updated: ${new Date(job.lastUpdate).toLocaleString()}` : ''}
-            </div>
-        </div>
-    `).join('');
-}
-
 function startPolling() {
     // Show sections
     document.getElementById('pending-jobs').hidden = false;
     document.getElementById('running-jobs').hidden = false;
+    document.getElementById('completed-jobs').hidden = false;
     
     // Initial fetch
     fetchJobs();
