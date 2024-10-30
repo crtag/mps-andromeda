@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: quick-app-config
+  namespace: tenant-ac-machine
+data:
+  api.job.url: "https://jobassignment-poloq3qrtq-uc.a.run.app"
+  api.status.url: "https://jobstatusreport-poloq3qrtq-uc.a.run.app"
+  status.check.interval: "60"

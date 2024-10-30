@@ -16,8 +16,23 @@ spec:
     spec:
       containers:
       - name: quick-app
-        image: crtag/quick-app:1.0.0
-        command: ["tail", "-f", "/dev/null"]
+        image: crtag/quick-app-managed:latest
+        env:
+        - name: API_URL_JOB_ASSIGNMENT
+          valueFrom:
+            configMapKeyRef:
+              name: quick-app-config
+              key: api.job.url
+        - name: API_URL_STATUS_REPORT
+          valueFrom:
+            configMapKeyRef:
+              name: quick-app-config
+              key: api.status.url
+        - name: STATUS_CHECK_INTERVAL
+          valueFrom:
+            configMapKeyRef:
+              name: quick-app-config
+              key: status.check.interval
         volumeMounts:
         - name: andromeda-shared-disk
           mountPath: /mnt/shared-disk
