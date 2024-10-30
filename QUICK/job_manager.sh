@@ -55,6 +55,32 @@ STATUS_CHECK_INTERVAL="${STATUS_CHECK_INTERVAL:-$DEFAULT_STATUS_CHECK_INTERVAL}"
 JOB_ASSIGNMENT_ENDPOINT="${API_URL_JOB_ASSIGNMENT}"
 STATUS_REPORT_ENDPOINT="${API_URL_STATUS_REPORT}"
 
+check_process_status() {
+    local pid=$1
+    if [ -z "$pid" ]; then
+        return 1
+    fi
+    local state=$(ps -o state= -p "$pid" 2>/dev/null)
+    if [ -z "$state" ] || [ "${state:0:1}" == "Z" ]; then
+        return 1
+    fi
+    return 0
+}
+
+is_app_running() {
+    local pids=$(pgrep -x "$APP_EXECUTABLE")
+    if [ -z "$pids" ]; then
+        return 1
+    fi
+    for pid in $pids; do
+        if check_process_status "$pid"; then
+            return 0
+        fi
+    done
+    log_message "WARNING: Detected zombie process - pod restart may be needed"
+    return 1
+}
+
 # Initialize offset tracking for a new job
 initialize_offset_tracking() {
     local file_key="$1"
@@ -218,7 +244,7 @@ fetch_new_job() {
 main_loop() {
     while true; do
         # Check if APP is running
-        if pgrep -x "$APP_EXECUTABLE" > /dev/null; then
+        if is_app_running; then
             log_message "$APP_EXECUTABLE is running"
             report_status
         # If APP is not running but has output files, report status
