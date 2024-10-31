@@ -12,8 +12,9 @@ async function getMostRecentPendingJob() {
     const pendingJobs = await listPendingJobs();
     if (pendingJobs.length === 0) return null;
 
-    // Get the first job (they're already sorted by submitTime)
-    const job = pendingJobs[0];
+    // Get the first job in PENDING status (they're already sorted by submitTime)
+    const job = pendingJobs.find((job) => job.status === "PENDING");
+    if (!job) return null;
 
     try {
         const content = await getJobFile(job.filename, "spec");
