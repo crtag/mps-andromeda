@@ -24,7 +24,8 @@ spec:
             - /bin/bash
             - -c
             - >
-              pgrep quick.cuda.MPI | xargs -I {} ps -o state= -p {} | grep -vq '^Z'
+              ! pgrep -x quick.cuda.MPI || 
+              (pgrep -x quick.cuda.MPI | xargs -I {} ps -o state= -p {} | grep -vq '^Z')
           initialDelaySeconds: 30
           periodSeconds: 15
           timeoutSeconds: 5
@@ -36,7 +37,7 @@ spec:
             - -c
             - >
               ! pgrep -x quick.cuda.MPI || 
-              (pgrep quick.cuda.MPI | xargs -I {} ps -o state= -p {} | grep -vq '^Z')
+              (pgrep -x quick.cuda.MPI | xargs -I {} ps -o state= -p {} | grep -vq '^Z')
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
