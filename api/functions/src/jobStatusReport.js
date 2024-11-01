@@ -20,6 +20,20 @@ async function handleJobCompletion(filenameKey, moldenContent = null) {
     await moveJobToResults(`${filenameKey}.in`);
 }
 
+async function handleJobFailure(filenameKey) {
+    // Update status and move job spec to results, in this order
+    await updateJobStatus(`${filenameKey}.in`, "FAILED", {
+        completionTime: new Date().toISOString(),
+    });
+    try {
+        await moveJobToResults(`${filenameKey}.in`);
+        return true;
+    } catch (error) {
+        logger.error("Error moving FAILED job to results", error);
+        return false;
+    }
+}
+
 async function appendToResultFile(filenameKey, content, offset) {
     try {
         // Get existing content if any
@@ -94,14 +108,24 @@ exports.handler = onRequest({cors: true}, async (req, res) => {
         // Handle content update if present
         if (content) {
             await appendToResultFile(filenameKey, content, payload.offset);
-            await updateJobStatus(`${filenameKey}.in`, payload.status, {
-                lastUpdate: new Date().toISOString(),
-            });
         }
+
+        // Update job status timestamp
+        await updateJobStatus(`${filenameKey}.in`, payload.status, {
+            lastUpdate: new Date().toISOString(),
+        });
 
         // Handle job completion
         if (payload.status === "ENDED") {
             await handleJobCompletion(filenameKey, molden);
+        }
+
+        // Handle job failure
+        if (payload.status === "FAILED") {
+            if (!await handleJobFailure(filenameKey)) {
+                res.status(500).send("Error moving FAILED job to results");
+                return;
+            }
         }
 
         res.status(204).send();
