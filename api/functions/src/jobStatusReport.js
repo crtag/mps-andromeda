@@ -122,10 +122,7 @@ exports.handler = onRequest({cors: true}, async (req, res) => {
 
         // Handle job failure
         if (payload.status === "FAILED") {
-            if (!await handleJobFailure(filenameKey)) {
-                res.status(500).send("Error moving FAILED job to results");
-                return;
-            }
+            await handleJobFailure(filenameKey);
         }
 
         res.status(204).send();
