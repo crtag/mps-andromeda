@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QUICK Job Manager</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <main>
+        <!-- Upload Section -->
+        <section id="upload-section">
+            <h2>Add New Job</h2>
+            <div id="drop-zone" class="drop-zone">
+                Drag and drop job spec file here or click to browse
+                <input type="file" id="fileInput" hidden accept=".in">
+            </div>
+            <div id="status" class="status" style="display: none;"></div>
+        </section>
+
+        <section id="pending-jobs" hidden>
+            <h2>Pending Jobs</h2>
+            <div class="jobs-list">
+                <div class="no-jobs">Loading...</div>
+            </div>
+        </section>
+
+        <section id="running-jobs" hidden>
+            <h2>Running Jobs</h2>
+            <div class="jobs-list">
+                <div class="no-jobs">Loading...</div>
+            </div>
+        </section>
+
+        <section id="completed-jobs" hidden>
+            <h2>Completed Jobs</h2>
+            <div class="jobs-list">
+                <div class="no-jobs">Loading...</div>
+            </div>
+        </section>
+    </main>
+    <script src="app.js"></script>
+</body>
+</html>

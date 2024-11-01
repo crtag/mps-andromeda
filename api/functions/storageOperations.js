@@ -47,12 +47,13 @@ async function listCompletedJobs(limit = 10) {
         const files = await listFilesWithPrefix(RESULTS_PREFIX);
         const completedJobs = new Map();
 
-        // Group files by job (excluding .molden files)
+        // Group files by job, excluding .in files from initial entry creation
         files.forEach((file) => {
             const fullName = file.name.replace(RESULTS_PREFIX, "");
             const baseName = fullName.replace(/\.(out|molden)$/, "");
 
-            if (!completedJobs.has(baseName)) {
+            // Only create a new entry if encountering .out or .molden files
+            if (!completedJobs.has(baseName) && (fullName.endsWith(".out") || fullName.endsWith(".molden"))) {
                 completedJobs.set(baseName, {filename: baseName});
             }
 
@@ -84,6 +85,7 @@ async function listCompletedJobs(limit = 10) {
         throw error;
     }
 }
+
 
 async function getJobFile(filename, type) {
     try {

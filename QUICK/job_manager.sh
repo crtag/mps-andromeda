@@ -55,6 +55,32 @@ STATUS_CHECK_INTERVAL="${STATUS_CHECK_INTERVAL:-$DEFAULT_STATUS_CHECK_INTERVAL}"
 JOB_ASSIGNMENT_ENDPOINT="${API_URL_JOB_ASSIGNMENT}"
 STATUS_REPORT_ENDPOINT="${API_URL_STATUS_REPORT}"
 
+check_process_status() {
+    local pid=$1
+    if [ -z "$pid" ]; then
+        return 1
+    fi
+    local state=$(ps -o state= -p "$pid" 2>/dev/null)
+    if [ -z "$state" ] || [ "${state:0:1}" == "Z" ]; then
+        return 1
+    fi
+    return 0
+}
+
+is_app_running() {
+    local pids=$(pgrep -x "$APP_EXECUTABLE")
+    if [ -z "$pids" ]; then
+        return 1
+    fi
+    for pid in $pids; do
+        if check_process_status "$pid"; then
+            return 0
+        fi
+    done
+    log_message "WARNING: Detected zombie process - pod restart may be needed"
+    return 1
+}
+
 # Initialize offset tracking for a new job
 initialize_offset_tracking() {
     local file_key="$1"
@@ -92,10 +118,16 @@ report_status() {
             status="RUNNING"
         elif [[ -f "$output_file" && -s "$output_file" ]]; then
             status="ENDED"
-        else
+        # Check if input files is older than ten times of STATUS_CHECK_INTERVAL and there are no output files
+        elif [[ $(find "$input_file" -mmin +$((10 * STATUS_CHECK_INTERVAL / 60)) 2>/dev/null) && ! -f "$output_file" ]]; then
             status="FAILED"
         fi
         
+        # Skip if status is not set
+        if [[ -z "$status" ]]; then
+            continue
+        fi
+
         # Get last reported offset
         local last_offset=0
         if [[ -f "${OFFSET_FILE}" ]]; then
@@ -218,17 +250,19 @@ fetch_new_job() {
 main_loop() {
     while true; do
         # Check if APP is running
-        if pgrep -x "$APP_EXECUTABLE" > /dev/null; then
+        if is_app_running; then
             log_message "$APP_EXECUTABLE is running"
-            report_status
         # If APP is not running but has output files, report status
         elif [[ -n $(find "$SHARED_DIR" -maxdepth 1 -name "*.out") ]]; then
             log_message "$APP_EXECUTABLE is not running, but there are output files, reporting and cleaning up..."
-            report_status
         else
             log_message "$APP_EXECUTABLE is not running, fetching new job..."
             fetch_new_job
         fi
+        
+        # Report status for all edge cases
+        report_status
+
         # Sleep before the next cycle
         sleep "$STATUS_CHECK_INTERVAL"
     done

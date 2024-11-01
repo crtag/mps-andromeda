@@ -8,4 +8,3 @@ exports.listPendingJobs = jobManagement.listPendingJobsHandler;
 exports.listCompletedJobs = jobManagement.listCompletedJobsHandler;
 exports.getJobFile = jobManagement.getJobFileHandler;
 exports.uploadJobSpec = jobManagement.uploadJobSpecHandler;
-

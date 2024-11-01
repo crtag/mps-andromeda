@@ -14,10 +14,49 @@ spec:
       labels:
         app: quick-app
     spec:
+      restartPolicy: Always
       containers:
       - name: quick-app
-        image: crtag/quick-app:1.0.0
-        command: ["tail", "-f", "/dev/null"]
+        image: crtag/quick-app-managed:latest
+        livenessProbe:
+          exec:
+            command:
+            - /bin/bash
+            - -c
+            - >
+              ! pgrep -x quick.cuda.MPI || 
+              (pgrep -x quick.cuda.MPI | xargs -I {} ps -o state= -p {} | grep -vq '^Z')
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 2
+        readinessProbe:
+          exec:
+            command:
+            - /bin/bash
+            - -c
+            - >
+              ! pgrep -x quick.cuda.MPI || 
+              (pgrep -x quick.cuda.MPI | xargs -I {} ps -o state= -p {} | grep -vq '^Z')
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        env:
+        - name: API_URL_JOB_ASSIGNMENT
+          valueFrom:
+            configMapKeyRef:
+              name: quick-app-config
+              key: api.job.url
+        - name: API_URL_STATUS_REPORT
+          valueFrom:
+            configMapKeyRef:
+              name: quick-app-config
+              key: api.status.url
+        - name: STATUS_CHECK_INTERVAL
+          valueFrom:
+            configMapKeyRef:
+              name: quick-app-config
+              key: status.check.interval
         volumeMounts:
         - name: andromeda-shared-disk
           mountPath: /mnt/shared-disk

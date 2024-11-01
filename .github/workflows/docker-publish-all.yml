@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       
       - name: Check for changes in QUICK folder
         id: check_folder_changes
@@ -71,7 +71,7 @@ jobs:
       # Log in to Docker Hub
       - name: Log in to Docker Hub
         if: steps.extract_versions.outcome == 'success'
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}

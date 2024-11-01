@@ -27,7 +27,7 @@ async function validateJobSpec(content) {
     };
 }
 
-exports.listPendingJobsHandler = onRequest(async (req, res) => {
+exports.listPendingJobsHandler = onRequest({cors: true}, async (req, res) => {
     if (req.method !== "GET") {
         res.status(405).send("Method Not Allowed");
         return;
@@ -42,7 +42,7 @@ exports.listPendingJobsHandler = onRequest(async (req, res) => {
     }
 });
 
-exports.listCompletedJobsHandler = onRequest(async (req, res) => {
+exports.listCompletedJobsHandler = onRequest({cors: true}, async (req, res) => {
     if (req.method !== "GET") {
         res.status(405).send("Method Not Allowed");
         return;
@@ -58,7 +58,7 @@ exports.listCompletedJobsHandler = onRequest(async (req, res) => {
     }
 });
 
-exports.getJobFileHandler = onRequest(async (req, res) => {
+exports.getJobFileHandler = onRequest({cors: true}, async (req, res) => {
     if (req.method !== "GET") {
         res.status(405).send("Method Not Allowed");
         return;
@@ -72,6 +72,8 @@ exports.getJobFileHandler = onRequest(async (req, res) => {
         }
 
         const content = await getJobFile(filename, type);
+        // force download headers
+        res.set("Content-Disposition", `attachment; filename="${filename}"`);
         res.status(200).send(content);
     } catch (error) {
         logger.error("Error getting job file", error);
@@ -80,7 +82,7 @@ exports.getJobFileHandler = onRequest(async (req, res) => {
     }
 });
 
-exports.uploadJobSpecHandler = onRequest(async (req, res) => {
+exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
     if (req.method !== "POST") {
         res.status(405).send("Method Not Allowed");
         return;
@@ -106,9 +108,13 @@ exports.uploadJobSpecHandler = onRequest(async (req, res) => {
             return;
         }
 
+        // strip off any dangerous file name characters from originalFilename
+        // eslint-disable-next-line no-useless-escape
+        const safeFilename = originalFilename.replace(/[^a-zA-Z0-9_\-]/g, "_");
+
         // Generate unique filename with timestamp while preserving original name
         const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-        const filename = `${originalFilename.replace(/\.in$/, "")}_${timestamp}.in`;
+        const filename = `${safeFilename.replace(/\.in$/, "")}_${timestamp}.in`;
 
         // Save to storage
         await saveJobFile(filename, content, "spec", {
