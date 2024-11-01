@@ -118,10 +118,16 @@ report_status() {
             status="RUNNING"
         elif [[ -f "$output_file" && -s "$output_file" ]]; then
             status="ENDED"
-        else
+        # Check if input files is older than ten times of STATUS_CHECK_INTERVAL and there are no output files
+        elif [[ $(find "$input_file" -mmin +$((10 * STATUS_CHECK_INTERVAL / 60)) 2>/dev/null) && ! -f "$output_file" ]]; then
             status="FAILED"
         fi
         
+        # Skip if status is not set
+        if [[ -z "$status" ]]; then
+            continue
+        fi
+
         # Get last reported offset
         local last_offset=0
         if [[ -f "${OFFSET_FILE}" ]]; then
@@ -246,15 +252,17 @@ main_loop() {
         # Check if APP is running
         if is_app_running; then
             log_message "$APP_EXECUTABLE is running"
-            report_status
         # If APP is not running but has output files, report status
         elif [[ -n $(find "$SHARED_DIR" -maxdepth 1 -name "*.out") ]]; then
             log_message "$APP_EXECUTABLE is not running, but there are output files, reporting and cleaning up..."
-            report_status
         else
             log_message "$APP_EXECUTABLE is not running, fetching new job..."
             fetch_new_job
         fi
+        
+        # Report status for all edge cases
+        report_status
+
         # Sleep before the next cycle
         sleep "$STATUS_CHECK_INTERVAL"
     done
