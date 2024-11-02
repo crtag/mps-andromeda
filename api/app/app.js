@@ -9,13 +9,14 @@ const API = {
 };
 
 const REFRESH_INTERVAL = 300000; // 300 seconds
-const COMPLETED_JOBS_LIMIT = 10;
+const COMPLETED_JOBS_LIMIT = 25;
 
 // DOM Elements
 const elements = {
     dropZone: document.getElementById('drop-zone'),
     fileInput: document.getElementById('fileInput'),
-    status: document.getElementById('status')
+    status: document.getElementById('status'),
+    completedJobsSubtitle: document.getElementById('completed-jobs-subtitle')
 };
 
 // Event Listeners
@@ -206,6 +207,12 @@ function startPolling() {
     setInterval(fetchJobs, REFRESH_INTERVAL);
 }
 
-// Initialize
-initializeUpload();
-startPolling();
+// document onload event handler
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize
+    initializeUpload();
+    startPolling();
+
+    // add content to completed jobs subtitle
+    elements.completedJobsSubtitle.textContent = `(last ${COMPLETED_JOBS_LIMIT} max)`;
+});
