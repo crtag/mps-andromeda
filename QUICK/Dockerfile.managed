@@ -9,7 +9,8 @@ RUN apt-get update -y \
  && rm -rf /var/lib/apt/lists/*
 
 RUN curl https://sdk.cloud.google.com > install.sh
-RUN bash install.sh --disable-prompts
+RUN chmod +x install.sh
+RUN install.sh --disable-prompts
 RUN rm install.sh
 
 ENV PATH $PATH:/root/google-cloud-sdk/bin
