@@ -193,7 +193,11 @@ EOF
             else
                 # Try to move the molden file to the GCP bucket if it exists, otherwise just move the input and output files
                 if [[ -f "$molden_file" ]]; then
-                    gcloud storage cp "$molden_file" "${GCP_BUCKET}/${GCP_BUCKET_PREFIX}/" && rm -f "$molden_file"
+                    if gcloud_output=$(gcloud storage cp "$molden_file" "${GCP_BUCKET}/${GCP_BUCKET_PREFIX}/" && rm -f "$molden_file" 2>&1); then
+                        log_message "Successful molden file upload: $gcloud_output"
+                    else
+                        log_message "Error while uploading molden file: $gcloud_output"
+                    fi
                 fi
                 # Don't proceed with the cleanup if molden file is not successfully moved
                 if [[ -f "$molden_file" ]]; then
