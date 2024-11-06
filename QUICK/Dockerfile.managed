@@ -8,6 +8,18 @@ RUN apt-get update -y \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
+RUN curl https://sdk.cloud.google.com > install.sh \
+    && bash install.sh --disable-prompts \
+    && rm install.sh
+
+ENV PATH $PATH:/root/google-cloud-sdk/bin
+
+RUN echo "$GOOGLE_CLOUD_SA_KEY" > /tmp/sa-key.json
+RUN gcloud auth activate-service-account --key-file /tmp/sa-key.json
+
+# Clean up
+RUN rm /tmp/sa-key.json
+RUN unset GOOGLE_CLOUD_SA_KEY
 
 # Set the working directory
 WORKDIR /src/install

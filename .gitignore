@@ -2,3 +2,5 @@
 .env
 website-docs
 *.out*
+**/manifests/secrets.yaml
+**/manifests/*.json
