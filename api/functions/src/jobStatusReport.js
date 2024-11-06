@@ -67,13 +67,16 @@ async function appendToResultFile(filenameKey, content, offset) {
     }
 }
 
-exports.handler = onRequest({cors: true}, async (req, res) => {
+exports.handler = onRequest(async (req, res) => {
     if (req.method !== "POST") {
         res.status(405).send("Method Not Allowed");
         return;
     }
 
+    logger.info("Received job status report");
+
     const payload = req.body;
+
     if (payload.filename === undefined ||
         payload.status === undefined ||
         payload.new_content === undefined ||
@@ -83,25 +86,24 @@ exports.handler = onRequest({cors: true}, async (req, res) => {
         return;
     }
 
+    // Decode content
+    const content = payload.new_content ?
+        Buffer.from(payload.new_content, "base64").toString("utf8") :
+        null;
+    const molden = payload.molden ?
+        Buffer.from(payload.molden, "base64").toString("utf8") :
+        null;
+
+    // Log the operation
+    logger.info("Processing job status report", {
+        filename: payload.filename,
+        offset: payload.offset,
+        status: payload.status,
+        contentSize: content ? content.length : 0,
+        moldenSize: molden ? molden.length : 0,
+    });
+
     try {
-        // Decode content
-        const content = payload.new_content ?
-            Buffer.from(payload.new_content, "base64").toString("utf8") :
-            null;
-        const molden = payload.molden ?
-            Buffer.from(payload.molden, "base64").toString("utf8") :
-            null;
-
-        // Log the operation
-        logger.info("Processing job status report", {
-            structuredData: true,
-            filename: payload.filename,
-            offset: payload.offset,
-            status: payload.status,
-            contentSize: content ? content.length : 0,
-            moldenSize: molden ? molden.length : 0,
-        });
-
         // IMPORTANT! filename comes without an extension
         const filenameKey = payload.filename;
 

@@ -158,7 +158,6 @@ async function updateJobStatus(filename, status, additionalMetadata = {}) {
         });
     } catch (error) {
         logger.error("Error updating job status", error);
-        throw error;
     }
 }
 
