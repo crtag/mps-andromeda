@@ -155,7 +155,13 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
                 <div class="job-time">
                     ${isCompleted && job?.completionTime ? `Completed: ${new Date(job.completionTime).toLocaleString()}` : ''}
                     ${job?.submitTime ? `<br>Submitted: ${new Date(job.submitTime).toLocaleString()}` : ''}
-                    ${job?.lastUpdate ? `<br>Updated: ${new Date(job.lastUpdate).toLocaleString()}` : ''}
+                    ${job?.lastUpdate ? `<br>Last updated: ${new Date(job.lastUpdate).toLocaleString()}` : ''}
+                    
+                    ${(!isCompleted && job?.submitTime && job?.lastUpdate) ? `<br>Run duration: 
+                        ${luxon.Duration
+                            .fromMillis(new Date(job.lastUpdate).getTime() - new Date(job.submitTime).getTime())
+                            .toFormat("d 'days' h 'hrs' m 'mins'")}` : ''}
+                    
                 </div>
                 <div class="job-files">${linksHtml}</div>
             </div>
