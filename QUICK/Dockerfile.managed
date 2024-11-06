@@ -2,23 +2,17 @@
 FROM crtag/quick-app:latest
 
 RUN apt-get update -y \
- && apt-get install -y \
+&& apt-get install -y \
     curl \
     procps \
     apt-transport-https \ 
     ca-certificates \
     gnupg \
- && apt-get clean \
- && rm -rf /var/lib/apt/lists/*
+&& apt-get clean \
+&& rm -rf /var/lib/apt/lists/*
 
+# Install Google Cloud SDK
 RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && apt-get update -y && apt-get install google-cloud-cli -y
-
-RUN echo "$GOOGLE_CLOUD_SA_KEY" > /tmp/sa-key.json
-RUN gcloud auth activate-service-account --key-file /tmp/sa-key.json
-
-# Clean up
-RUN rm /tmp/sa-key.json
-RUN unset GOOGLE_CLOUD_SA_KEY
 
 # Set the working directory
 WORKDIR /src/install

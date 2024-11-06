@@ -67,6 +67,14 @@ STATUS_CHECK_INTERVAL="${STATUS_CHECK_INTERVAL:-$DEFAULT_STATUS_CHECK_INTERVAL}"
 JOB_ASSIGNMENT_ENDPOINT="${API_URL_JOB_ASSIGNMENT}"
 STATUS_REPORT_ENDPOINT="${API_URL_STATUS_REPORT}"
 
+# provision gcloud
+echo "$GOOGLE_CLOUD_SA_KEY" > /tmp/sa-key.json
+gcloud auth activate-service-account --key-file /tmp/sa-key.json
+
+# Clean up auth file and environment variable
+rm /tmp/sa-key.json
+unset GOOGLE_CLOUD_SA_KEY
+
 check_process_status() {
     local pid=$1
     if [ -z "$pid" ]; then
