@@ -194,10 +194,10 @@ EOF
                 # App is not running, perform cleanup operations
                 # Try to move the molden file to the GCP bucket if it exists, otherwise just move the input and output files
                 if [[ -f "$molden_file" ]]; then
-                    if gcloud_output=$(gsutil -f cp "$molden_file" "${GCP_BUCKET}/${GCP_BUCKET_PREFIX}/" && rm -f "$molden_file" 2>&1); then
-                        log_message "Successful molden file upload: $gcloud_output"
+                    if bucket_upload_and_cleanup "$molden_file" "${GCP_BUCKET}/${GCP_BUCKET_PREFIX}/"; then
+                        log_message "Upload operation completed successfully"
                     else
-                        log_message "Error while uploading molden file: $gcloud_output"
+                        log_message "Upload operation failed, check previous error messages for details"
                     fi
                 fi
                 # Don't proceed with the cleanup if molden file is not successfully moved
@@ -263,6 +263,35 @@ fetch_new_job() {
             log_message "No new jobs available or failed to fetch job (HTTP code: $http_code, response: $response)"
         fi
     fi
+}
+
+bucket_upload_and_cleanup() {
+    local source_file="$1"
+    local destination="$2"
+    local exit_code=0
+    local upload_output=""
+    local remove_output=""
+    
+    # First attempt the upload
+    if ! upload_output=$(gsutil -f cp "$source_file" "$destination" 2>&1); then
+        exit_code=1
+        log_message "ERROR: Failed to upload $source_file to $destination"
+        log_message "Upload error details: $upload_output"
+        return $exit_code
+    fi
+    
+    log_message "Successfully uploaded $source_file to $destination"
+    
+    # Only attempt removal if upload succeeded
+    if ! remove_output=$(rm -f "$source_file" 2>&1); then
+        exit_code=1
+        log_message "WARNING: Upload succeeded but failed to remove source file $source_file"
+        log_message "Removal error details: $remove_output"
+        return $exit_code
+    fi
+    
+    log_message "Successfully removed source file $source_file"
+    return $exit_code
 }
 
 # Main loop to manage job and status reporting
