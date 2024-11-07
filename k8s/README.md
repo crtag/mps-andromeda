@@ -47,7 +47,7 @@ Create namespace for the application, it can match the destination cluster namin
 
 `microk8s kubectl create namespace tenant-ac-machine`
 
-The management layer makes use of glcoud to transfer result files, so a service account needs to be set vie the environment variable in the application deployment. Use this secrets manifest to wrap the GCP service account key JSON, and name it `secrets.yaml`, or anything else but make a note of the name to use later in deployment. Create a service account with limited permissions directly through the Google Cloud Console to allow uploads only (Role: Storage Object Creator & Viewer) and fetch the key through the console.
+The management layer makes use of glcoud to transfer result files, so a service account needs to be set vie the environment variable in the application deployment. Use this secrets manifest to wrap the GCP service account key JSON, and name it `secrets.yaml`, or anything else but make a note of the name to use later in deployment. Create a service account with limited permissions directly through the Google Cloud Console to allow uploads only (Roles: **Storage Admin**, **Storage Folder Admin**) and fetch the key through the console.
 
 ```
 apiVersion: v1
