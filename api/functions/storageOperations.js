@@ -65,6 +65,13 @@ async function listCompletedJobs(limit = 10) {
             }
         });
 
+        // exclude pending jobs from completed jobs
+        const pendingFiles = await listFilesWithPrefix(JOBS_PREFIX);
+        pendingFiles.forEach((file) => {
+            const baseName = file.name.replace(JOBS_PREFIX, "").replace(".in", "");
+            completedJobs.delete(baseName);
+        });
+
         // Get completion times from metadata
         const jobPromises = Array.from(completedJobs.values()).map(async (job) => {
             if (job.resultFile) {
@@ -158,7 +165,6 @@ async function updateJobStatus(filename, status, additionalMetadata = {}) {
         });
     } catch (error) {
         logger.error("Error updating job status", error);
-        throw error;
     }
 }
 

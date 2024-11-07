@@ -94,3 +94,8 @@ section {
 .job-files a:hover {
     text-decoration: underline;
 }
+
+h2 > div {
+    display: inline;
+    font-size: small;
+}

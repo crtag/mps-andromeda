@@ -9,13 +9,14 @@ const API = {
 };
 
 const REFRESH_INTERVAL = 300000; // 300 seconds
-const COMPLETED_JOBS_LIMIT = 10;
+const COMPLETED_JOBS_LIMIT = 25;
 
 // DOM Elements
 const elements = {
     dropZone: document.getElementById('drop-zone'),
     fileInput: document.getElementById('fileInput'),
-    status: document.getElementById('status')
+    status: document.getElementById('status'),
+    completedJobsSubtitle: document.getElementById('completed-jobs-subtitle')
 };
 
 // Event Listeners
@@ -154,7 +155,13 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
                 <div class="job-time">
                     ${isCompleted && job?.completionTime ? `Completed: ${new Date(job.completionTime).toLocaleString()}` : ''}
                     ${job?.submitTime ? `<br>Submitted: ${new Date(job.submitTime).toLocaleString()}` : ''}
-                    ${job?.lastUpdate ? `<br>Updated: ${new Date(job.lastUpdate).toLocaleString()}` : ''}
+                    ${job?.lastUpdate ? `<br>Last updated: ${new Date(job.lastUpdate).toLocaleString()}` : ''}
+                    
+                    ${(!isCompleted && job?.submitTime && job?.lastUpdate) ? `<br>Run duration: 
+                        ${luxon.Duration
+                            .fromMillis(new Date(job.lastUpdate).getTime() - new Date(job.submitTime).getTime())
+                            .toFormat("d 'days' h 'hrs' m 'mins'")}` : ''}
+                    
                 </div>
                 <div class="job-files">${linksHtml}</div>
             </div>
@@ -206,6 +213,12 @@ function startPolling() {
     setInterval(fetchJobs, REFRESH_INTERVAL);
 }
 
-// Initialize
-initializeUpload();
-startPolling();
+// document onload event handler
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize
+    initializeUpload();
+    startPolling();
+
+    // add content to completed jobs subtitle
+    elements.completedJobsSubtitle.textContent = `(last ${COMPLETED_JOBS_LIMIT} max)`;
+});

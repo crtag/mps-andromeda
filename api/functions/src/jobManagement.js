@@ -110,11 +110,13 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
 
         // strip off any dangerous file name characters from originalFilename
         // eslint-disable-next-line no-useless-escape
-        const safeFilename = originalFilename.replace(/[^a-zA-Z0-9_\-]/g, "_");
+        const safeFilename = originalFilename.replace(".in", "").replace(/[^a-zA-Z0-9_\-]/g, "_");
 
-        // Generate unique filename with timestamp while preserving original name
-        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-        const filename = `${safeFilename.replace(/\.in$/, "")}_${timestamp}.in`;
+        // Generate unique filename using truncated timestamp
+        const timestamp = new Date().toISOString()
+            .replace(/[^0-9]/g, "") // Remove non-digits
+            .slice(0, 12); // Take first 12 digits (enough for uniqueness)
+        const filename = `${safeFilename}_${timestamp}.in`;
 
         // Save to storage
         await saveJobFile(filename, content, "spec", {

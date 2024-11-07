@@ -2,6 +2,8 @@
 DEFAULT_APP_EXECUTABLE="quick.cuda.MPI"
 DEFAULT_STATUS_CHECK_INTERVAL=60
 DEFAULT_SHARED_DIR="/mnt/shared-disk"
+DEFAULT_GCP_BUCKET="gs://mps-andromeda.appspot.com"
+DEFAULT_GCP_BUCKET_PREFIX="job-results"
 
 # Trap SIGCHLD to ensure terminated background processes are cleaned up
 trap 'wait' SIGCHLD
@@ -10,6 +12,16 @@ trap 'wait' SIGCHLD
 if [[ -z "${SHARED_DIR}" ]]; then
     echo "WARNING: SHARED_DIR not set, using default value $DEFAULT_SHARED_DIR"
 fi
+
+# Check if GCP_BUCKET or GCP_BUCKET_PREFIX are set or use default
+if [[ -z "${GCP_BUCKET}" ]]; then
+    echo "WARNING: GCP_BUCKET not set, using default value $DEFAULT_GCP_BUCKET"
+fi
+if [[ -z "${GCP_BUCKET_PREFIX}" ]]; then
+    echo "WARNING: GCP_BUCKET_PREFIX not set, using default value $DEFAULT_GCP_BUCKET_PREFIX"
+fi
+GCP_BUCKET="${GCP_BUCKET:-$DEFAULT_GCP_BUCKET}"
+GCP_BUCKET_PREFIX="${GCP_BUCKET_PREFIX:-$DEFAULT_GCP_BUCKET_PREFIX}"
 
 # Directory for shared data
 SHARED_DIR="${SHARED_DIR:-$DEFAULT_SHARED_DIR}"
@@ -54,6 +66,17 @@ STATUS_CHECK_INTERVAL="${STATUS_CHECK_INTERVAL:-$DEFAULT_STATUS_CHECK_INTERVAL}"
 # Define API endpoints
 JOB_ASSIGNMENT_ENDPOINT="${API_URL_JOB_ASSIGNMENT}"
 STATUS_REPORT_ENDPOINT="${API_URL_STATUS_REPORT}"
+
+# Provision gcloud
+echo "$GOOGLE_CLOUD_SA_KEY" > /tmp/sa-key.json
+gcloud auth activate-service-account --key-file /tmp/sa-key.json
+
+# supress parallel upload warning message
+gcloud config set storage/parallel_composite_upload_enabled True
+
+# Clean up auth file and environment variable
+rm /tmp/sa-key.json
+unset GOOGLE_CLOUD_SA_KEY
 
 check_process_status() {
     local pid=$1
@@ -148,45 +171,44 @@ report_status() {
         # Prepare and send report
         local response_code
         
-        if [[ -f "$molden_file" ]]; then
-            # Report with molden file
-            molden_content=$(base64 "$molden_file")
-            response_code=$(curl -s -w "%{http_code}" -o /dev/null \
-                -X POST "${STATUS_REPORT_ENDPOINT}" \
-                -H "Content-Type: application/json" \
-                -d @- << EOF
-        {
-            "filename": "$base_name",
-            "status": "$status",
-            "new_content": "$new_lines",
-            "offset": $last_offset,
-            "molden": "$molden_content"
-        }
+        response_code=$(curl -s -w "%{http_code}" -o /dev/null \
+            -X POST "${STATUS_REPORT_ENDPOINT}" \
+            -H "Content-Type: application/json" \
+            -d @- << EOF
+{
+    "filename": "$base_name",
+    "status": "$status",
+    "new_content": "$new_lines",
+    "offset": $last_offset
+}
 EOF
         )
-        else
-            # Report without molden file
-            response_code=$(curl -s -w "%{http_code}" -o /dev/null \
-                -X POST "${STATUS_REPORT_ENDPOINT}" \
-                -H "Content-Type: application/json" \
-                -d @- << EOF
-        {
-            "filename": "$base_name",
-            "status": "$status",
-            "new_content": "$new_lines",
-            "offset": $last_offset
-        }
-EOF
-        )
-        fi
 
         # Handle successful report
         if [[ "$response_code" == "204" ]]; then
+            
+            log_message "Successfully reported status $status for $file_key"
+
             # Update offset file if still running
             if [[ "$status" == "RUNNING" ]]; then
                 sed -i.bak "/^${file_key}:/d" "${OFFSET_FILE}"
                 echo "${file_key}:${current_offset}" >> "${OFFSET_FILE}"
             else
+                # App is not running, perform cleanup operations
+                # Try to move the molden file to the GCP bucket if it exists, otherwise just move the input and output files
+                if [[ -f "$molden_file" ]]; then
+                    if bucket_upload_and_cleanup "$molden_file" "${GCP_BUCKET}/${GCP_BUCKET_PREFIX}/"; then
+                        log_message "Upload operation completed successfully"
+                    else
+                        log_message "Upload operation failed, check previous error messages for details"
+                    fi
+                fi
+                # Don't proceed with the cleanup if molden file is not successfully moved
+                if [[ -f "$molden_file" ]]; then
+                    log_message "Failed to move $molden_file to GCP bucket, will try again later"
+                    continue
+                fi
+
                 # Move files to processed directory and cleanup
                 mv "$input_file" "$processed_dir/"
                 [[ -f "$output_file" ]] && mv "$output_file" "$processed_dir/"
@@ -195,9 +217,9 @@ EOF
                 rm -f "${OFFSET_FILE}.bak"
             fi
             
-            log_message "Successfully reported status $status for $file_key"
+            log_message "Successfully completed status $status operations for $file_key"
         else
-            log_message "Failed to report status for $file_key (HTTP $response_code)"
+            log_message "Failed to report status $status for $file_key (HTTP $response_code)"
         fi
     done
 }
@@ -244,6 +266,39 @@ fetch_new_job() {
             log_message "No new jobs available or failed to fetch job (HTTP code: $http_code, response: $response)"
         fi
     fi
+}
+
+bucket_upload_and_cleanup() {
+    local source_file="$1"
+    local destination="$2"
+    local exit_code=0
+    local upload_output=""
+    local remove_output=""
+    
+    # Capture upload output in both success and failure cases
+    upload_output=$(gcloud storage cp "$source_file" "$destination" 2>&1)
+    if [ $? -ne 0 ]; then
+        exit_code=1
+        log_message "ERROR: Failed to upload $source_file to $destination"
+        log_message "Upload error details: $upload_output"
+        return $exit_code
+    fi
+    
+    log_message "Successfully uploaded $source_file to $destination"
+    [ -n "$upload_output" ] && log_message "Upload details: $upload_output"
+    
+    # Only attempt removal if upload succeeded
+    remove_output=$(rm -f "$source_file" 2>&1)
+    if [ $? -ne 0 ]; then
+        exit_code=1
+        log_message "WARNING: Upload succeeded but failed to remove source file $source_file"
+        log_message "Removal error details: $remove_output"
+        return $exit_code
+    fi
+    
+    log_message "Successfully removed source file $source_file"
+    [ -n "$remove_output" ] && log_message "Removal details: $remove_output"
+    return $exit_code
 }
 
 # Main loop to manage job and status reporting

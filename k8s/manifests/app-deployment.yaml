@@ -18,6 +18,7 @@ spec:
       containers:
       - name: quick-app
         image: crtag/quick-app-managed:latest
+        imagePullPolicy: Always
         livenessProbe:
           exec:
             command:
@@ -42,6 +43,11 @@ spec:
           timeoutSeconds: 5
           failureThreshold: 3
         env:
+        - name: GOOGLE_CLOUD_SA_KEY # Google Cloud Service Account Key JSON
+          valueFrom:
+            secretKeyRef:
+              name: gcloud-sa-key
+              key: service-account.json
         - name: API_URL_JOB_ASSIGNMENT
           valueFrom:
             configMapKeyRef:
