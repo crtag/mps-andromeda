@@ -71,6 +71,9 @@ STATUS_REPORT_ENDPOINT="${API_URL_STATUS_REPORT}"
 echo "$GOOGLE_CLOUD_SA_KEY" > /tmp/sa-key.json
 gcloud auth activate-service-account --key-file /tmp/sa-key.json
 
+# supress parallel upload warning message
+gcloud config set storage/parallel_composite_upload_enabled True
+
 # Clean up auth file and environment variable
 rm /tmp/sa-key.json
 unset GOOGLE_CLOUD_SA_KEY
