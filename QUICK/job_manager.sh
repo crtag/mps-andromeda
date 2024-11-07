@@ -272,8 +272,9 @@ bucket_upload_and_cleanup() {
     local upload_output=""
     local remove_output=""
     
-    # First attempt the upload
-    if ! upload_output=$(gsutil -f cp "$source_file" "$destination" 2>&1); then
+    # Capture upload output in both success and failure cases
+    upload_output=$(gsutil -f cp "$source_file" "$destination" 2>&1)
+    if [ $? -ne 0 ]; then
         exit_code=1
         log_message "ERROR: Failed to upload $source_file to $destination"
         log_message "Upload error details: $upload_output"
@@ -281,9 +282,11 @@ bucket_upload_and_cleanup() {
     fi
     
     log_message "Successfully uploaded $source_file to $destination"
+    [ -n "$upload_output" ] && log_message "Upload details: $upload_output"
     
     # Only attempt removal if upload succeeded
-    if ! remove_output=$(rm -f "$source_file" 2>&1); then
+    remove_output=$(rm -f "$source_file" 2>&1)
+    if [ $? -ne 0 ]; then
         exit_code=1
         log_message "WARNING: Upload succeeded but failed to remove source file $source_file"
         log_message "Removal error details: $remove_output"
@@ -291,6 +294,7 @@ bucket_upload_and_cleanup() {
     fi
     
     log_message "Successfully removed source file $source_file"
+    [ -n "$remove_output" ] && log_message "Removal details: $remove_output"
     return $exit_code
 }
 
