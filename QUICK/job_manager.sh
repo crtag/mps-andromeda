@@ -273,7 +273,7 @@ bucket_upload_and_cleanup() {
     local remove_output=""
     
     # Capture upload output in both success and failure cases
-    upload_output=$(gsutil cp "$source_file" "$destination" 2>&1)
+    upload_output=$(gcloud storage cp "$source_file" "$destination" 2>&1)
     if [ $? -ne 0 ]; then
         exit_code=1
         log_message "ERROR: Failed to upload $source_file to $destination"
