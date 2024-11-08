@@ -180,8 +180,7 @@ async function moveJobToResults(filename) {
 
         return true;
     } catch (error) {
-        logger.error("Error moving job to results", error);
-        throw error;
+        logger.warn("Error moving job to results, could have been moved earlier", error);
     }
 }
 
