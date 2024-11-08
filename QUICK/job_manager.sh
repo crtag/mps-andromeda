@@ -252,7 +252,7 @@ fetch_new_job() {
         initialize_offset_tracking "${file_name%.*}.out"
         
         # Keep the run log next to the input file
-        run_log="${SHARED_DIR}/${input_file%.*}_run.log"
+        run_log="${input_file%.*}_run.log"
         touch "$run_log"
 
         log_message "Starting job execution"
