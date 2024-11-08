@@ -15,15 +15,21 @@ spec:
         app: quick-app
     spec:
       restartPolicy: Always
+
       tolerations:
       - key: "node.kubernetes.io/not-ready"
         operator: "Exists"
         effect: "NoExecute"
-        tolerationSeconds: 3600
+        tolerationSeconds: 300
       - key: "node.kubernetes.io/unreachable"
         operator: "Exists"
         effect: "NoExecute"
-        tolerationSeconds: 3600
+        tolerationSeconds: 86400
+      - key: "node.kubernetes.io/network-unavailable"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 86400
+
       terminationGracePeriodSeconds: 300
       containers:
       - name: quick-app
