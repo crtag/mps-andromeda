@@ -128,6 +128,7 @@ report_status() {
         local base_name=$(basename "$input_file" .in)
         local output_file="${SHARED_DIR}/${base_name}.out"
         local molden_file="${SHARED_DIR}/${base_name}.molden"
+        local run_log="${SHARED_DIR}/${base_name}_run.log"
         local file_key="${base_name}.out"
         
         # Initialize offset tracking if it doesn't exist for this file
@@ -179,7 +180,8 @@ report_status() {
     "filename": "$base_name",
     "status": "$status",
     "new_content": "$new_lines",
-    "offset": $last_offset
+    "offset": $last_offset,
+    "run_log": "$(base64 < "$run_log")"
 }
 EOF
         )
@@ -213,6 +215,7 @@ EOF
                 mv "$input_file" "$processed_dir/"
                 [[ -f "$output_file" ]] && mv "$output_file" "$processed_dir/"
                 [[ -f "$molden_file" ]] && mv "$molden_file" "$processed_dir/"
+                [[ -f "$run_log" ]] && mv "$run_log" "$processed_dir/"
                 sed -i.bak "/^${file_key}:/d" "${OFFSET_FILE}"
                 rm -f "${OFFSET_FILE}.bak"
             fi
@@ -248,10 +251,14 @@ fetch_new_job() {
         # Initialize offset tracking for the new job
         initialize_offset_tracking "${file_name%.*}.out"
         
+        # Keep the run log next to the input file
+        run_log="${SHARED_DIR}/${input_file%.*}_run.log"
+
         log_message "Starting job execution"
 
-        # Start the job in the background
-        mpirun --allow-run-as-root -np 1 "$APP_EXECUTABLE" "$input_file" >> "$LOG_FILE" 2>&1 &
+        # Start the job in the background and redirect tee's output to prevent console clutter
+        mpirun --allow-run-as-root -np 1 "$APP_EXECUTABLE" "$input_file" 2>&1 | tee -a "$LOG_FILE" "$run_log" >/dev/null &
+
         pid=$!
 
         disown $pid
