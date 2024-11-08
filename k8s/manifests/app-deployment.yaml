@@ -22,15 +22,18 @@ spec:
         livenessProbe:
           exec:
             command:
-            - /bin/bash
-            - -c
-            - >
-              ! pgrep -x quick.cuda.MPI || 
-              (pgrep -x quick.cuda.MPI | xargs -I {} ps -o state= -p {} | grep -vq '^Z')
-          initialDelaySeconds: 30
-          periodSeconds: 15
-          timeoutSeconds: 5
-          failureThreshold: 2
+              - /bin/bash
+              - -c
+              - |
+                if pgrep -x quick.cuda.MPI >/dev/null; then
+                  pgrep -x quick.cuda.MPI | xargs -I {} ps -o state= -p {} | grep -qv '^Z'
+                else
+                  exit 1
+                fi
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 4
         readinessProbe:
           exec:
             command:
