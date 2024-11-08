@@ -42,7 +42,7 @@ log_message() {
     local message="$1"
     local timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
 
-    echo "[$timestamp] $message"   # Output to console
+    # echo "[$timestamp] $message"   # Output to console
     echo "[$timestamp] $message" >> "$LOG_FILE"  # Append to log file
 }
 
