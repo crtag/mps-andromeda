@@ -25,23 +25,33 @@ spec:
               - /bin/bash
               - -c
               - |
-                if pgrep -x quick.cuda.MPI >/dev/null; then
-                  pgrep -x quick.cuda.MPI | xargs -I {} ps -o state= -p {} | grep -qv '^Z'
-                else
+                # Pass if no MPI process (waiting for jobs)
+                if ! pgrep -x quick.cuda.MPI > /dev/null; then
+                  exit 0
+                fi
+                # If process exists, check if it's zombie
+                if pgrep -x quick.cuda.MPI | xargs -I {} ps -o state= -p {} | grep -q '^Z'; then
+                  # Found zombie process, fail the probe
                   exit 1
                 fi
+                # Process exists and is not zombie - pass
+                exit 0
           initialDelaySeconds: 60
           periodSeconds: 30
           timeoutSeconds: 10
-          failureThreshold: 4
+          failureThreshold: 3
         readinessProbe:
           exec:
             command:
             - /bin/bash
             - -c
-            - >
-              ! pgrep -x quick.cuda.MPI || 
-              (pgrep -x quick.cuda.MPI | xargs -I {} ps -o state= -p {} | grep -vq '^Z')
+            - |
+              # Container is ready if either:
+              # 1. No MPI process (waiting for jobs)
+              # 2. MPI process exists and is not zombie
+              ! pgrep -x quick.cuda.MPI > /dev/null || \
+              ! pgrep -x quick.cuda.MPI | xargs -I {} ps -o state= -p {} | grep -q '^Z'
+          initialDelaySeconds: 10
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3

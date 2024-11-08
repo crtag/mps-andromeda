@@ -184,7 +184,9 @@ report_status() {
     "run_log": "$(base64 < "$run_log")"
 }
 EOF
-        )
+        ) || {
+            log_message "Network error occurred"
+        }
 
         # Handle successful report
         if [[ "$response_code" == "204" ]]; then
@@ -231,7 +233,10 @@ EOF
 fetch_new_job() {
     
     # Request a new job from the API and capture response code and body
-    response=$(curl -s -w "\n%{http_code}" -X GET "$JOB_ASSIGNMENT_ENDPOINT")
+    response=$(curl -s -w "\n%{http_code}" -X GET "$JOB_ASSIGNMENT_ENDPOINT")  || {
+        log_message "Network error occurred"
+    }
+
     http_code=$(echo "$response" | tail -n1)
     response=$(echo "$response" | head -n -1)
 
