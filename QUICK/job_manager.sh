@@ -253,6 +253,7 @@ fetch_new_job() {
         
         # Keep the run log next to the input file
         run_log="${SHARED_DIR}/${input_file%.*}_run.log"
+        touch "$run_log"
 
         log_message "Starting job execution"
 
