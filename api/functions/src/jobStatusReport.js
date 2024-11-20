@@ -7,12 +7,7 @@ const {
     getJobFile,
 } = require("../storageOperations");
 
-async function handleJobCompletion(filenameKey, moldenContent = null) {
-    // Save molden file if provided
-    if (moldenContent) {
-        await saveJobFile(`${filenameKey}.molden`, moldenContent, "result");
-    }
-
+async function handleJobCompletion(filenameKey) {
     // Update status and move job spec to results, in this order
     await updateJobStatus(`${filenameKey}.in`, "ENDED", {
         completionTime: new Date().toISOString(),
@@ -90,9 +85,6 @@ exports.handler = onRequest(async (req, res) => {
     const content = payload.new_content ?
         Buffer.from(payload.new_content, "base64").toString("utf8") :
         null;
-    const molden = payload.molden ?
-        Buffer.from(payload.molden, "base64").toString("utf8") :
-        null;
 
     // Log the operation
     logger.info("Processing job status report", {
@@ -100,7 +92,6 @@ exports.handler = onRequest(async (req, res) => {
         offset: payload.offset,
         status: payload.status,
         contentSize: content ? content.length : 0,
-        moldenSize: molden ? molden.length : 0,
     });
 
     try {
@@ -119,7 +110,7 @@ exports.handler = onRequest(async (req, res) => {
 
         // Handle job completion
         if (payload.status === "ENDED") {
-            await handleJobCompletion(filenameKey, molden);
+            await handleJobCompletion(filenameKey);
         }
 
         // Handle job failure
