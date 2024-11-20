@@ -131,8 +131,11 @@ async function saveJobFile(filename, content, type, metadata = {}) {
         const file = getBucket().file(fullPath);
 
         await file.save(content, {
+            contentType: "text/plain",
+        });
+
+        await file.setMetadata({
             metadata: {
-                contentType: "text/plain",
                 ...metadata,
                 timestamp: new Date().toISOString(),
             },
