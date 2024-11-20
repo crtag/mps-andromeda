@@ -124,7 +124,7 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
         // Save to storage
         await saveJobFile(filename, content, "spec", {
             status: "PENDING",
-            submitTime: timestamp,
+            submitTime: new Date().toISOString(),
             jobSpec,
         });
 
