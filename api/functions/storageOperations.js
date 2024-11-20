@@ -173,8 +173,14 @@ async function moveJobToResults(filename) {
         const sourcePath = `${JOBS_PREFIX}${filename}`;
         const sourceFile = getBucket().file(sourcePath);
 
-        // First, copy the spec file to results
-        await sourceFile.copy(`${RESULTS_PREFIX}${filename}`);
+        // Get the metadata of the source file
+        const [metadata] = await sourceFile.getMetadata();
+
+        // First, copy the spec file to results with the existing metadata
+        await sourceFile.copy(`${RESULTS_PREFIX}${filename}`, {
+            metadata: metadata.metadata,
+        });
+
         // Then delete the original
         await sourceFile.delete();
 

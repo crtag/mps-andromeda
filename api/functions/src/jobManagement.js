@@ -118,10 +118,14 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
             .slice(0, 12); // Take first 12 digits (enough for uniqueness)
         const filename = `${safeFilename}_${timestamp}.in`;
 
+        // extract the first line of the file to use as the job spec in metadata
+        const jobSpec = content.split("\n")[0];
+
         // Save to storage
         await saveJobFile(filename, content, "spec", {
             status: "PENDING",
             submitTime: timestamp,
+            jobSpec,
         });
 
         res.status(200).json({
