@@ -27,6 +27,7 @@ async function listPendingJobs() {
         const jobPromises = files.map(async (file) => {
             const [metadata] = await file.getMetadata();
             return {
+                ...metadata.metadata,
                 filename: file.name.replace(JOBS_PREFIX, ""), // Remove prefix for client use
                 submitTime: metadata.timeCreated,
                 status: metadata.metadata?.status || "PENDING",
@@ -50,10 +51,10 @@ async function listCompletedJobs(limit = 10) {
         // Group files by job, excluding .in files from initial entry creation
         files.forEach((file) => {
             const fullName = file.name.replace(RESULTS_PREFIX, "");
-            const baseName = fullName.replace(/\.(out|molden)$/, "");
+            const baseName = fullName.replace(/\.(out|molden|in)$/, "");
 
-            // Only create a new entry if encountering .out or .molden files
-            if (!completedJobs.has(baseName) && (fullName.endsWith(".out") || fullName.endsWith(".molden"))) {
+            // Create a new entry if encountering new file and skip log files
+            if (!completedJobs.has(baseName) && !fullName.endsWith(".log")) {
                 completedJobs.set(baseName, {filename: baseName});
             }
 
@@ -62,6 +63,8 @@ async function listCompletedJobs(limit = 10) {
                 job.moldenFile = fullName;
             } else if (fullName.endsWith(".out")) {
                 job.resultFile = fullName;
+            } else if (fullName.endsWith(".in")) {
+                job.specFile = fullName;
             }
         });
 
@@ -74,17 +77,29 @@ async function listCompletedJobs(limit = 10) {
 
         // Get completion times from metadata
         const jobPromises = Array.from(completedJobs.values()).map(async (job) => {
-            if (job.resultFile) {
-                const [metadata] = await getBucket()
-                    .file(`${RESULTS_PREFIX}${job.resultFile}`)
+            let metadata;
+            try {
+                [metadata] = await getBucket()
+                    .file(`${RESULTS_PREFIX}${job.filename}.in`)
                     .getMetadata();
-                job.completionTime = metadata.metadata?.completionTime || metadata.timeCreated;
+            } catch (error) {
+                logger.warn("Error getting metadata for job, missing file?", error);
             }
-            return job;
+
+            if (job.filename && metadata) {
+                // add all metadata to the job object
+                job = {
+                    ...job,
+                    ...metadata.metadata,
+                };
+                return job;
+            }
+            return null;
         });
 
         const jobs = await Promise.all(jobPromises);
         return jobs
+            .filter((job) => job !== null)
             .sort((a, b) => new Date(b.completionTime) - new Date(a.completionTime))
             .slice(0, limit);
     } catch (error) {
