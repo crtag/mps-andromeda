@@ -169,6 +169,12 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
                             .fromMillis(new Date(job.lastUpdate).getTime() - new Date(job.startTime).getTime())
                             .toFormat("d 'days' h 'hrs' m 'mins'")}` : ''}
                     
+                    ${isCompleted && job?.normalTermination ?
+                        job.normalTermination === 'true' ?  
+                            `<span class="normal-termination true">&#10004; successful run</span>` :
+                            `<span class="normal-termination false">&#9888; aborted run</span>` : ''
+                    }
+                    
                 </div>
                 <div class="job-files">${linksHtml}</div>
             </div>

@@ -5,6 +5,7 @@ const {
     updateJobStatus,
     moveJobToResults,
     getJobFile,
+    trackNormalTermination,
 } = require("../storageOperations");
 
 async function handleJobCompletion(filenameKey) {
@@ -12,6 +13,9 @@ async function handleJobCompletion(filenameKey) {
     await updateJobStatus(`${filenameKey}.in`, "ENDED", {
         completionTime: new Date().toISOString(),
     });
+
+    await trackNormalTermination(filenameKey);
+
     await moveJobToResults(`${filenameKey}.in`);
 }
 

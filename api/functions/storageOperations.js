@@ -1,6 +1,7 @@
 const {logger} = require("firebase-functions");
 const {getStorage} = require("firebase-admin/storage");
 const admin = require("firebase-admin");
+const {Writable} = require("stream");
 
 // Initialize Firebase Admin if not already initialized
 if (!admin.apps.length) {
@@ -163,6 +164,119 @@ async function saveJobFile(filename, content, type, metadata = {}) {
     }
 }
 
+/**
+ * Tracks normal termination status by reading the last line of .out file and updating metadata in the
+ * corresponding .in file. When postScan is true, expects both files to be in RESULTS_PREFIX location,
+ * indicating post execution scan; otherwise expects .in file in JOBS_PREFIX location which is the default.
+ * @param {string} filename - Base filename without extension
+ * @param {boolean} [postScan=false] - When true, both files are in RESULTS_PREFIX; otherwise .in file is in JOBS_PREFIX
+ * @return {Promise<boolean>} Returns true if metadata was updated successfully, false if files don't exist or on error
+ * @throws {Error} If filename parameter is empty or undefined
+ */
+async function trackNormalTermination(filename, postScan = false) {
+    if (!filename?.trim()) {
+        throw new Error("Valid filename is required");
+    }
+
+    const outputFile = getBucket().file(`${RESULTS_PREFIX}${filename}.out`);
+    const inputFile = getBucket().file(`${postScan ? RESULTS_PREFIX : JOBS_PREFIX}${filename}.in`);
+
+    try {
+        // Verify file existence
+        const [outputExists] = await outputFile.exists();
+        const [inputExists] = await inputFile.exists();
+        if (!outputExists || !inputExists) {
+            logger.warn(`Required files not found for ${filename}`);
+            return false;
+        }
+        logger.info(`Start termination tracking for ${filename}`);
+
+        // Get file size for dynamic buffer sizing
+        const [stats] = await outputFile.getMetadata();
+        const fileSize = parseInt(stats.size);
+        const readSize = Math.min(fileSize, 128); // Read up to 128B from end
+
+        let lastFileBytes = "";
+
+        // Read file ending
+        await new Promise((resolve, reject) => {
+            logger.info(`Will read last ${readSize} bytes out of ${fileSize} bytes total from ${filename}.out`);
+
+            const stream = outputFile.createReadStream({
+                start: Math.max(0, fileSize - readSize),
+                end: fileSize,
+            });
+
+            const writable = new Writable({
+                write(chunk, encoding, callback) {
+                    try {
+                        logger.info(`Read ${chunk.length} bytes from ${filename}.out with [${encoding}] encoding`);
+                        const validEncoding = (typeof encoding === "string" && !["buffer", ""].includes(encoding)) ?
+                            encoding : "utf8";
+                        lastFileBytes += chunk.toString(validEncoding);
+                        callback();
+                    } catch (err) {
+                        callback(err);
+                    }
+                },
+            });
+
+            // Handle events for both streams
+            stream.on("error", (err) => {
+                logger.error(`Error reading output file ${filename}`, err);
+                reject(err);
+            });
+
+            writable.on("error", (err) => {
+                logger.error(`Error in writable stream for ${filename}`, err);
+                reject(err);
+            });
+
+            writable.on("finish", () => {
+                resolve();
+            });
+
+            // Clean up on completion or error
+            const cleanup = () => {
+                logger.info(`Finished reading ${lastFileBytes.length} bytes from ${filename}.out, cleaning up`);
+                stream.removeAllListeners();
+                writable.removeAllListeners();
+            };
+
+            writable.on("finish", cleanup);
+            writable.on("error", cleanup);
+            stream.on("error", cleanup);
+
+            logger.info(`Piping output stream for ${filename}`);
+            // Start the pipeline
+            stream.pipe(writable);
+        });
+
+        // Process file content
+        const lines = lastFileBytes.split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean);
+
+        const lastLine = lines.length > 0 ? lines[lines.length - 1] : "";
+        const normalTermination = lastLine.includes("Normal Termination");
+
+        // Update metadata
+        const [metadata] = await inputFile.getMetadata();
+        await inputFile.setMetadata({
+            metadata: {
+                ...metadata.metadata,
+                normalTermination,
+                lastOutputLine: lastLine, // Store last line for debugging
+            },
+        });
+
+        return true;
+    } catch (error) {
+        logger.error(`Failed to track termination for ${filename}`, error);
+        return false;
+    }
+}
+
 async function updateJobStatus(filename, status, additionalMetadata = {}) {
     try {
         const fullPath = `${JOBS_PREFIX}${filename}`;
@@ -215,6 +329,7 @@ module.exports = {
     saveJobFile,
     updateJobStatus,
     moveJobToResults,
+    trackNormalTermination,
     JOBS_PREFIX,
     RESULTS_PREFIX,
 };

@@ -104,3 +104,11 @@ h2 > div {
     display: inline;
     font-size: small;
 }
+
+.normal-termination.true {
+    color: #00cc00;
+}
+
+.normal-termination.false {
+    color: #cc0000;
+}

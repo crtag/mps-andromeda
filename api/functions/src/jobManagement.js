@@ -5,6 +5,7 @@ const {
     listCompletedJobs,
     getJobFile,
     saveJobFile,
+    trackNormalTermination,
 } = require("../storageOperations");
 
 async function validateJobSpec(content) {
@@ -140,4 +141,33 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
             message: "Error uploading job spec",
         });
     }
+});
+
+exports.terminationPostScanHandler = onRequest({cors: true}, async (req, res) => {
+    if (req.method !== "POST") {
+        res.status(405).send("Method Not Allowed");
+        return;
+    }
+
+    try {
+        const baseFilename = req.body.filename;
+
+        if (!baseFilename) {
+            res.status(400).send("Filename is required");
+            return;
+        }
+
+        const trackRes = await trackNormalTermination(baseFilename, true);
+        if (!trackRes) {
+            res.status(500).send("Job output tracking failed");
+            return;
+        }
+    } catch (error) {
+        logger.error("Error while postscanning getting", error);
+        res.status(500)
+            .send(error.message || "Internal Server Error");
+        return;
+    }
+
+    res.status(200).send("OK");
 });
