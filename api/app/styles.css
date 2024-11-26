@@ -74,6 +74,11 @@ section {
     font-weight: bold;
 }
 
+.job-spec {
+    font-size: small;
+    font-weight: bolder;
+}
+
 .job-time {
     font-size: 0.9em;
     color: #666;
