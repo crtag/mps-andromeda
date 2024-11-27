@@ -16,14 +16,14 @@ const RESULTS_PREFIX = "job-results/";
 const getBucket = () => storage.bucket();
 
 // Utility function to list files with a specific prefix
-async function listFilesWithPrefix(prefix) {
-    const [files] = await getBucket().getFiles({prefix});
+async function listFilesWithQuery(prefix, matchGlob) {
+    const [files] = await getBucket().getFiles({prefix, matchGlob});
     return files;
 }
 
 async function listPendingJobs() {
     try {
-        const files = await listFilesWithPrefix(JOBS_PREFIX);
+        const files = await listFilesWithQuery(JOBS_PREFIX);
 
         const jobPromises = files.map(async (file) => {
             const [metadata] = await file.getMetadata();
@@ -46,31 +46,27 @@ async function listPendingJobs() {
 
 async function listCompletedJobs(limit = 10) {
     try {
-        const files = await listFilesWithPrefix(RESULTS_PREFIX);
+        const files = await listFilesWithQuery(RESULTS_PREFIX, "**.out");
+        logger.info(`Found ${files.length} completed jobs`);
         const completedJobs = new Map();
 
-        // Group files by job, excluding .in files from initial entry creation
         files.forEach((file) => {
             const fullName = file.name.replace(RESULTS_PREFIX, "");
-            const baseName = fullName.replace(/\.(out|molden|in)$/, "");
+            const baseName = fullName.replace(/\.(out)$/, "");
 
-            // Create a new entry if encountering new file and skip log files
-            if (!completedJobs.has(baseName) && !fullName.endsWith(".log")) {
+            // Create a new entry if encountering new baseName
+            if (!completedJobs.has(baseName)) {
                 completedJobs.set(baseName, {filename: baseName});
             }
 
             const job = completedJobs.get(baseName);
-            if (fullName.endsWith(".molden")) {
-                job.moldenFile = fullName;
-            } else if (fullName.endsWith(".out")) {
-                job.resultFile = fullName;
-            } else if (fullName.endsWith(".in")) {
-                job.specFile = fullName;
-            }
+            job.resultFile = `${fullName}`;
+            job.moldenFile = `${baseName}.molden`;
+            job.specFile = `${baseName}.in`;
         });
 
         // exclude pending jobs from completed jobs
-        const pendingFiles = await listFilesWithPrefix(JOBS_PREFIX);
+        const pendingFiles = await listFilesWithQuery(JOBS_PREFIX);
         pendingFiles.forEach((file) => {
             const baseName = file.name.replace(JOBS_PREFIX, "").replace(".in", "");
             completedJobs.delete(baseName);
@@ -81,7 +77,7 @@ async function listCompletedJobs(limit = 10) {
             let metadata;
             try {
                 [metadata] = await getBucket()
-                    .file(`${RESULTS_PREFIX}${job.filename}.in`)
+                    .file(`${RESULTS_PREFIX}${job.specFile}`)
                     .getMetadata();
             } catch (error) {
                 logger.warn("Error getting metadata for job, missing file?", error);
@@ -94,6 +90,8 @@ async function listCompletedJobs(limit = 10) {
                     ...metadata.metadata,
                 };
                 return job;
+            } else {
+                logger.warn(`Job ${job.specFile} file or its metadata is missing`);
             }
             return null;
         });
@@ -101,7 +99,11 @@ async function listCompletedJobs(limit = 10) {
         const jobs = await Promise.all(jobPromises);
         return jobs
             .filter((job) => job !== null)
-            .sort((a, b) => new Date(b.completionTime) - new Date(a.completionTime))
+            .sort((a, b) => {
+                const timeA = new Date(a.completionTime || 0);
+                const timeB = new Date(b.completionTime || 0);
+                return timeB - timeA;
+            })
             .slice(0, limit);
     } catch (error) {
         logger.error("Error listing completed jobs", error);
