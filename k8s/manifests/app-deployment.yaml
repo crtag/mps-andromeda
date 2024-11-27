@@ -52,8 +52,8 @@ spec:
                 fi
                 # Process exists and is not zombie - pass
                 exit 0
-          initialDelaySeconds: 60
-          periodSeconds: 30
+          initialDelaySeconds: 180
+          periodSeconds: 120
           timeoutSeconds: 10
           failureThreshold: 3
         readinessProbe:
@@ -67,9 +67,9 @@ spec:
               # 2. MPI process exists and is not zombie
               ! pgrep -x quick.cuda.MPI > /dev/null || \
               ! pgrep -x quick.cuda.MPI | xargs -I {} ps -o state= -p {} | grep -q '^Z'
-          initialDelaySeconds: 10
-          periodSeconds: 10
-          timeoutSeconds: 5
+          initialDelaySeconds: 180
+          periodSeconds: 120
+          timeoutSeconds: 10
           failureThreshold: 3
         env:
         - name: GOOGLE_CLOUD_SA_KEY # Google Cloud Service Account Key JSON
