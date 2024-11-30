@@ -23,18 +23,20 @@ async function listFilesWithQuery(prefix, matchGlob) {
 
 async function listPendingJobs() {
     try {
-        const files = await listFilesWithQuery(JOBS_PREFIX);
+        const files = await listFilesWithQuery(JOBS_PREFIX, "**.in");
 
-        const jobPromises = files.map(async (file) => {
-            const [metadata] = await file.getMetadata();
-            return {
-                ...metadata.metadata,
-                filename: file.name.replace(JOBS_PREFIX, ""), // Remove prefix for client use
-                submitTime: metadata.timeCreated,
-                status: metadata.metadata?.status || "PENDING",
-                lastUpdate: metadata.metadata?.lastUpdate,
-            };
-        });
+        const jobPromises = files
+            .filter((file) => file.exists())
+            .map(async (file) => {
+                const [metadata] = await file.getMetadata();
+                return {
+                    ...metadata.metadata,
+                    filename: file.name.replace(JOBS_PREFIX, ""), // Remove prefix for client use
+                    submitTime: metadata.timeCreated,
+                    status: metadata.metadata?.status || "PENDING",
+                    lastUpdate: metadata.metadata?.lastUpdate,
+                };
+            });
 
         const jobs = await Promise.all(jobPromises);
         return jobs.sort((a, b) => new Date(a.submitTime) - new Date(b.submitTime));
