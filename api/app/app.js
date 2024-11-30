@@ -9,7 +9,7 @@ const API = {
 };
 
 const REFRESH_INTERVAL = 300000; // 300 seconds
-const COMPLETED_JOBS_LIMIT = 25;
+const COMPLETED_JOBS_LIMIT = 30;
 
 // DOM Elements
 const elements = {
@@ -94,10 +94,14 @@ function getDownloadLinks(job, isComplete) {
             url: getFileUrl(baseFilename + '.out', type),
             text: 'Output'
         });
-        links.push({
-            url: getFileUrl(baseFilename + '.molden', type),
-            text: 'Molden'
-        });
+
+        if (job?.jobSpec.toUpperCase().includes('EXPORT=MOLDEN')) {
+            links.push({
+                url: getFileUrl(baseFilename + '.molden', type),
+                text: 'Molden'
+            });
+        }
+
     } else {
         // Input file link
         links.push({
@@ -174,6 +178,12 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
                             `<span class="normal-termination true">&#10004; successful run</span>` :
                             `<span class="normal-termination false">&#9888; aborted run</span>` : ''
                     }
+
+                    ${isCompleted && job?.normalTermination && job.normalTermination === 'false' ?
+                        job?.lastOutputLine?.includes("Error Termination.") ?
+                            `<div class="error-termination-reason">${job.lastOutputLine}</div>` :
+                            `<div class="error-termination-reason">Unknown Termination Reason.</div>` : ''
+                    }
                     
                 </div>
                 <div class="job-files">${linksHtml}</div>
@@ -233,5 +243,5 @@ document.addEventListener('DOMContentLoaded', () => {
     startPolling();
 
     // add content to completed jobs subtitle
-    elements.completedJobsSubtitle.textContent = `(last ${COMPLETED_JOBS_LIMIT} max)`;
+    elements.completedJobsSubtitle.textContent = `(last ${COMPLETED_JOBS_LIMIT} only)`;
 });

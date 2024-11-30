@@ -112,3 +112,8 @@ h2 > div {
 .normal-termination.false {
     color: #cc0000;
 }
+
+.error-termination-reason {
+    font-size: smaller;
+    color: #cc0000;
+}
