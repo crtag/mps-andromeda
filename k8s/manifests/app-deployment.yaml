@@ -97,7 +97,7 @@ spec:
           mountPath: /mnt/shared-disk
         resources:
           limits:
-            nvidia.com/gpu: 1 
+            nvidia.com/gpu: 1
       volumes:
       - name: andromeda-shared-disk
         persistentVolumeClaim:
