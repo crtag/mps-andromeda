@@ -15,7 +15,9 @@ sudo usermod -a -G microk8s $USER
 
 sudo chown -f -R $USER ~/.kube
 
-su - $USER
+su - $USER 
+// or
+newgrp microk8s
 ```
 
 You may need to start microk8s with
@@ -46,6 +48,13 @@ Enable storage:
 Create namespace for the application, it can match the destination cluster naming convention:
 
 `microk8s kubectl create namespace tenant-ac-machine`
+
+__Note: you will need only these files for the following steps:__
+- `secrets.yaml`
+- `configmap.yaml`
+- `app-deployment.yaml`
+- `disk-deployment.yaml`
+- `pvc-deployment.yaml`
 
 The management layer makes use of glcoud to transfer result files, so a service account needs to be set vie the environment variable in the application deployment. Use this secrets manifest to wrap the GCP service account key JSON, and name it `secrets.yaml`, or anything else but make a note of the name to use later in deployment. Create a service account with limited permissions directly through the Google Cloud Console to allow uploads only (Roles: **Storage Admin**, **Storage Folder Admin**) and fetch the key through the console.
 
@@ -80,9 +89,12 @@ Useful commands:
 
 ```bash
 microk8s kubectl get all,pvc -n tenant-ac-machine
+microk8s kubectl delete pod quick-app-0 -n tenant-ac-machine
 microk8s kubectl delete all --all -n tenant-ac-machine
 microk8s kubectl delete pvc andromeda-shared-disk -n tenant-ac-machine
 ```
+
+__Note: Ensure to delete the applicaiton pod before shutting down the microk8s so it does not interfere with other instances.__ 
 
 YAML definitions have defined serviceName so it can be accessed like this:
 

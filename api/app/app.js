@@ -9,7 +9,7 @@ const API = {
 };
 
 const REFRESH_INTERVAL = 300000; // 300 seconds
-const COMPLETED_JOBS_LIMIT = 30;
+const COMPLETED_JOBS_LIMIT = 75;
 
 // DOM Elements
 const elements = {
@@ -95,7 +95,7 @@ function getDownloadLinks(job, isComplete) {
             text: 'Output'
         });
 
-        if (job?.jobSpec.toUpperCase().includes('EXPORT=MOLDEN')) {
+        if (job?.jobSpec && job?.jobSpec.toUpperCase().includes('EXPORT=MOLDEN')) {
             links.push({
                 url: getFileUrl(baseFilename + '.molden', type),
                 text: 'Molden'
