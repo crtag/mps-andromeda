@@ -6,6 +6,7 @@ const {
     getJobFile,
     saveJobFile,
     trackNormalTermination,
+    parseSimulationOutput,
 } = require("../storageOperations");
 
 async function validateJobSpec(content) {
@@ -163,7 +164,36 @@ exports.terminationPostScanHandler = onRequest({cors: true}, async (req, res) =>
             return;
         }
     } catch (error) {
-        logger.error("Error while postscanning getting", error);
+        logger.error("Error while post scanning", error);
+        res.status(500)
+            .send(error.message || "Internal Server Error");
+        return;
+    }
+
+    res.status(200).send("OK");
+});
+
+exports.terminationPostParseHandler = onRequest({cors: true}, async (req, res) => {
+    if (req.method !== "POST") {
+        res.status(405).send("Method Not Allowed");
+        return;
+    }
+
+    try {
+        const baseFilename = req.body.filename;
+
+        if (!baseFilename) {
+            res.status(400).send("Filename is required");
+            return;
+        }
+
+        const parseRes = await parseSimulationOutput(baseFilename);
+        if (!parseRes) {
+            res.status(500).send("Job output parsing failed");
+            return;
+        }
+    } catch (error) {
+        logger.error("Error while post parsing", error);
         res.status(500)
             .send(error.message || "Internal Server Error");
         return;

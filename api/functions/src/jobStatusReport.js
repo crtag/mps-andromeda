@@ -6,7 +6,9 @@ const {
     moveJobToResults,
     getJobFile,
     trackNormalTermination,
+    parseSimulationOutput,
 } = require("../storageOperations");
+const {extractMoleculeInput} = require("../outputOperations");
 
 async function handleJobCompletion(filenameKey) {
     // Update status and move job spec to results, in this order
@@ -17,6 +19,10 @@ async function handleJobCompletion(filenameKey) {
     await trackNormalTermination(filenameKey);
 
     await moveJobToResults(`${filenameKey}.in`);
+
+    // this must be run after the job spec is moved to results
+    // so all metadata and output are finalized
+    await parseSimulationOutput(filenameKey);
 }
 
 async function handleJobFailure(filenameKey) {
@@ -111,6 +117,20 @@ exports.handler = onRequest(async (req, res) => {
         await updateJobStatus(`${filenameKey}.in`, payload.status, {
             lastUpdate: new Date().toISOString(),
         });
+
+        // parse the initial payload for Molecule Input details
+        if (content && payload.offset === 0) {
+            const {totalAtomNumber, totalElectrons} = extractMoleculeInput(content);
+            // Update job status with metadata
+            const metaUpdate = {};
+            if (totalAtomNumber !== null) {
+                metaUpdate.totalAtomNumber = totalAtomNumber;
+            }
+            if (totalElectrons !== null) {
+                metaUpdate.totalElectrons = totalElectrons;
+            }
+            await updateJobStatus(`${filenameKey}.in`, payload.status, metaUpdate);
+        }
 
         // Handle job completion
         if (payload.status === "ENDED") {

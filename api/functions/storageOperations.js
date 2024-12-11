@@ -2,6 +2,7 @@ const {logger} = require("firebase-functions");
 const {getStorage} = require("firebase-admin/storage");
 const admin = require("firebase-admin");
 const {Writable} = require("stream");
+const {extractSection, extractSimulationResults} = require("./outputOperations");
 
 // Initialize Firebase Admin if not already initialized
 if (!admin.apps.length) {
@@ -281,6 +282,110 @@ async function trackNormalTermination(filename, postScan = false) {
     }
 }
 
+/**
+ * Parses the simulation output file and extracts the optimized geometry information.
+ *
+ * This function performs the following steps:
+ * 1. Checks if the job terminated normally by inspecting the metadata of the input file.
+ * 2. If the job did not terminate normally, it logs a warning and returns false.
+ * 3. Retrieves the output file corresponding to the given filename.
+ * 4. Downloads the content of the output file.
+ * 5. Extracts the simulation results from the output content.
+ * 6. Saves the extracted optimized geometry into a separate file with the same filename and .xyz extension.
+ * 7. Updates the metadata of the input file with the extracted simulation results properties.
+ *
+ * @param {string} filename - The name of the simulation output file to parse.
+ * @return {Promise<boolean>} - Returns true if the parsing and extraction were successful, otherwise false.
+ */
+async function parseSimulationOutput(filename) {
+    // check for the normal termination
+    // if not normal termination, then job failed and nothing to extract
+    let inputFile;
+    try {
+        inputFile = getBucket().file(`${RESULTS_PREFIX}${filename}.in`);
+    } catch (error) {
+        logger.error("Error getting input file. ", error);
+        return false;
+    }
+
+    let inputMetadata;
+    try {
+        [inputMetadata] = await inputFile.getMetadata();
+        if (!inputMetadata.metadata.normalTermination) {
+            logger.warn(`Job ${filename} did not terminate normally, nothing to parse.`);
+            return false;
+        }
+    } catch (error) {
+        logger.error("Error getting metadata for job, trying anyway with the parser. ", error);
+    }
+
+    // get the output file with the given filename
+    let outputFile;
+    try {
+        outputFile = getBucket().file(`${RESULTS_PREFIX}${filename}.out`);
+    } catch (error) {
+        logger.error("Error getting output file, can't proceed with parsing. ", error);
+        return false;
+    }
+
+    // download the output file content
+    let content;
+    try {
+        [content] = await outputFile.download();
+    } catch (error) {
+        logger.error("Error downloading output file content, aborting. ", error);
+        return false;
+    }
+
+    const outputContent = content.toString("utf8");
+    // extract the simulation results from the output content starting with
+    // ================ OPTIMIZED GEOMETRY INFORMATION ============== separator
+    const startSep = "================ OPTIMIZED GEOMETRY INFORMATION ==============";
+    const endSep = null; // no end separator, read till the end
+    const simulationResults = extractSection(outputContent, startSep, endSep, true);
+
+    const parsedResults = extractSimulationResults(simulationResults);
+
+    // save the extracted "optimizedGeometry" property into a separate file with the same filename and xyz extension
+    const optimizedGeometry = parsedResults.optimizedGeometry;
+    // unset the optimizedGeometry property from the simulation results object
+    // will track the optimized geometry in a separate file
+    // and update the metadata with the status of the optimized geometry file
+    delete parsedResults.optimizedGeometry;
+
+    let optimizedGeometrySaved = false;
+    if (!optimizedGeometry) {
+        logger.warn("No optimized geometry found in output file.");
+    } else {
+        try {
+            await saveJobFile(`${filename}.xyz`, optimizedGeometry, "result", {
+                timestamp: new Date().toISOString(),
+                contentType: "text/plain",
+            });
+            // eslint-disable-next-line no-unused-vars
+            optimizedGeometrySaved = true;
+        } catch (error) {
+            logger.error("Error saving optimized geometry. ", error);
+        }
+    }
+
+    // update metadata with the extracted simulation results object properties
+    try {
+        await inputFile.setMetadata({
+            metadata: {
+                ...inputMetadata.metadata,
+                ...parsedResults,
+                optimizedGeometrySaved,
+            },
+        });
+    } catch (error) {
+        logger.error("Error updating metadata for input file. ", error);
+        return false;
+    }
+
+    return true;
+}
+
 async function updateJobStatus(filename, status, additionalMetadata = {}) {
     try {
         const fullPath = `${JOBS_PREFIX}${filename}`;
@@ -334,6 +439,7 @@ module.exports = {
     updateJobStatus,
     moveJobToResults,
     trackNormalTermination,
+    parseSimulationOutput,
     JOBS_PREFIX,
     RESULTS_PREFIX,
 };
