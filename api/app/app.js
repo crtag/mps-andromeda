@@ -102,12 +102,6 @@ function getDownloadLinks(job, isComplete) {
             });
         }
 
-    } else {
-        // Input file link
-        links.push({
-            url: getFileUrl(job.filename, type),
-            text: 'Input'
-        });
     }
 
     return links;
@@ -155,23 +149,8 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
 
         return `
             <div class="job-item">
-                <div class="job-filename">${job.filename}</div>
-                ${job?.jobSpec ? 
-                    `<div class="job-spec">${job.jobSpec}</div>` 
-                    : ''
-                }
-                
-                <div class="job-time">
-                    ${job?.submitTime ? `Submitted: ${new Date(job.submitTime).toLocaleString()}` : ''}    
-                    ${!isCompleted && job?.startTime ? `<br>Started: ${new Date(job.startTime).toLocaleString()}` : ''}
-                    ${isCompleted && job?.completionTime ? `<br>Completed: ${new Date(job.completionTime).toLocaleString()}` : ''}
-
-                    ${!isCompleted && job?.lastUpdate ? `<br>Last updated: ${new Date(job.lastUpdate).toLocaleString()}` : ''}
-
-                    ${(!isCompleted && job?.startTime && job?.lastUpdate) ? `<br>Run duration: 
-                        ${luxon.Duration
-                            .fromMillis(new Date(job.lastUpdate).getTime() - new Date(job.startTime).getTime())
-                            .toFormat("d 'days' h 'hrs' m 'mins'")}` : ''}
+                <div class="job-filename">
+                    <a href="${getFileUrl(job.filename, 'spec')}" class="filename-link">${job.filename}</a>
                     
                     ${isCompleted && job?.normalTermination ?
                         job.normalTermination === 'true' ?  
@@ -184,8 +163,39 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
                             `<div class="error-termination-reason">${job.lastOutputLine}</div>` :
                             `<div class="error-termination-reason">Unknown Termination Reason.</div>` : ''
                     }
+                </div>
+                
+                <div class="job-time">
+                    ${job?.submitTime ? `Submitted: ${new Date(job.submitTime).toLocaleString()}` : ''}    
+                    ${!isCompleted && job?.startTime ? `<br>Started: ${new Date(job.startTime).toLocaleString()}` : ''}
+                    ${isCompleted && job?.completionTime ? `&emsp; Completed: ${new Date(job.completionTime).toLocaleString()}` : ''}
+
+                    ${!isCompleted && job?.lastUpdate ? `<br>Last updated: ${new Date(job.lastUpdate).toLocaleString()}` : ''}
+
+                    ${(!isCompleted && job?.startTime && job?.lastUpdate) ? `<br>Run duration: 
+                        ${luxon.Duration
+                            .fromMillis(new Date(job.lastUpdate).getTime() - new Date(job.startTime).getTime())
+                            .toFormat("d 'days' h 'hrs' m 'mins'")}` : ''}
                     
                 </div>
+
+                ${job?.jobSpec ? 
+                    `<div class="job-spec">${job.jobSpec}
+                        ${isCompleted ? `
+                            <button title="Copy to clipboard: \n${job.filename}, ${job.jobSpec.trim()}, ${job?.totalAtomNumber || ''}, ${job?.minimizedEnergy || ''}, ${job?.totalTime || ''}" class="btn-clipboard" onclick="(async () => await navigator.clipboard.writeText(\`${job.filename}, ${job.jobSpec.trim()}, ${job?.totalAtomNumber || ''}, ${job?.minimizedEnergy || ''}, ${job?.totalTime || ''}\`))()">
+                                <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAACXBIWXMAAAsTAAALEwEAmpwYAAAALElEQVR4nGNgIAuknfmPF2MArIL4QBpUA9E2pSFpIGTosNEAA2RpICkCiQAAL4ZePPv+G+QAAAAASUVORK5CYII=" alt="copy">
+                            </button>
+                         `: ''
+                        }
+                    </div>` 
+                    : ''
+                }
+                <div class="job-results">
+                    ${job?.totalAtomNumber ? `TOTAL ATOM NUMBER: ${job.totalAtomNumber}` : ''}
+                    ${job?.minimizedEnergy ? `<br>MINIMIZED ENERGY: ${job.minimizedEnergy}` : ''}
+                    ${job?.totalTime ? `<br>TOTAL TIME: ${job.totalTime}` : ''}
+                </div>
+
                 <div class="job-files">${linksHtml}</div>
             </div>
         `;

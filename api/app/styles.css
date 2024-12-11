@@ -1,3 +1,18 @@
+/* insert sans-serif font for all html and body */
+html, body {
+    font-family: 'Arial', sans-serif;
+}
+
+a {
+    color: #0066cc;
+    text-decoration: none;
+    font-size: 0.9em;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
 /* Base layout */
 main {
     max-width: 800px;
@@ -59,7 +74,7 @@ section {
 }
 
 .job-item {
-    padding: 15px;
+    padding: 15px 15px 0 15px;
     border-bottom: 1px solid #eee;
     display: flex;
     flex-direction: column;
@@ -71,7 +86,7 @@ section {
 }
 
 .job-filename {
-    font-weight: bold;
+    
 }
 
 .job-spec {
@@ -80,29 +95,26 @@ section {
 }
 
 .job-time {
-    font-size: 0.9em;
+    font-size: x-small;
     color: #666;
 }
 
 .job-files {
     display: flex;
     gap: 10px;
-    margin-top: 5px;
 }
 
-.job-files a {
-    color: #0066cc;
-    text-decoration: none;
-    font-size: 0.9em;
-}
-
-.job-files a:hover {
-    text-decoration: underline;
+.job-files:has(*) {
+    padding-bottom: 15px;
 }
 
 h2 > div {
     display: inline;
     font-size: small;
+}
+
+.normal-termination {
+    font-size: x-small;
 }
 
 .normal-termination.true {
@@ -114,6 +126,24 @@ h2 > div {
 }
 
 .error-termination-reason {
-    font-size: smaller;
+    font-size: x-small;
     color: #cc0000;
 }
+
+.job-results {
+    margin-top: -3px;
+    font-size: smaller;
+    font-family: monospace;
+}
+
+.btn-clipboard {
+    border: 0;
+    background: transparent;
+    color: #0066cc;
+    cursor: pointer;
+    font-size: medium;
+}
+
+.btn-clipboard img {
+    vertical-align: middle;
+} 
