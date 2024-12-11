@@ -102,6 +102,12 @@ function getDownloadLinks(job, isComplete) {
             });
         }
 
+        if (job?.optimizedGeometrySaved === 'true') {
+            links.push({
+                url: getFileUrl(baseFilename + '.xyz', type),
+                text: 'Optimized XYZ'
+            });
+        }
     }
 
     return links;
