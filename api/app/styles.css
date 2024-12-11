@@ -15,7 +15,7 @@ a:hover {
 
 /* Base layout */
 main {
-    max-width: 800px;
+    max-width: 640px;
     margin: 0 auto;
     padding: 20px;
 }
@@ -27,10 +27,8 @@ section {
 /* Upload component */
 .drop-zone {
     width: 100%;
-    max-width: 400px;
     height: 200px;
-    padding: 25px;
-    border: 2px dashed #ccc;
+    border: 1px dashed #ccc;
     border-radius: 4px;
     display: flex;
     align-items: center;
@@ -61,8 +59,6 @@ section {
 
 /* Jobs lists */
 .jobs-list {
-    border: 1px solid #eee;
-    border-radius: 4px;
     min-height: 50px;
     margin-top: 10px;
 }
@@ -74,15 +70,13 @@ section {
 }
 
 .job-item {
-    padding: 15px 15px 0 15px;
-    border-bottom: 1px solid #eee;
+    padding: 10px 15px 0 15px;
+    border: 1px solid #eee;
+    border-radius: 4px;
     display: flex;
     flex-direction: column;
     gap: 5px;
-}
-
-.job-item:last-child {
-    border-bottom: none;
+    margin: 5px 0;
 }
 
 .job-filename {
@@ -90,13 +84,14 @@ section {
 }
 
 .job-spec {
-    font-size: small;
+    font-family: monospace;
     font-weight: bolder;
 }
 
 .job-time {
     font-size: x-small;
     color: #666;
+    margin-top: -3px;
 }
 
 .job-files {
@@ -105,7 +100,7 @@ section {
 }
 
 .job-files:has(*) {
-    padding-bottom: 15px;
+    padding-bottom: 10px;
 }
 
 h2 > div {
@@ -132,6 +127,8 @@ h2 > div {
 
 .job-results {
     margin-top: -3px;
+    margin-left: 6px;
+    margin-bottom: 5px;
     font-size: smaller;
     font-family: monospace;
 }
@@ -145,5 +142,5 @@ h2 > div {
 }
 
 .btn-clipboard img {
-    vertical-align: middle;
+    vertical-align: text-bottom;
 } 
