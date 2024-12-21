@@ -1,12 +1,4 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
-
-exports[`Molecule Parser Tests extractMoleculeInput extracts correct atom number and electrons from real test file 1`] = `
-{
-  "totalAtomNumber": 31,
-  "totalElectrons": 62,
-}
-`;
-
 exports[`extractSimulationResults extracts simulation results from real test file 1`] = `
 {
   "minimizedEnergy": -840.694818961,

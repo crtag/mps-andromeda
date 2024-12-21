@@ -7,7 +7,9 @@ const {
     saveJobFile,
     trackNormalTermination,
     parseSimulationOutput,
+    updateJobMeta,
 } = require("../storageOperations");
+const {extractMoleculeInput} = require("../outputOperations");
 
 async function validateJobSpec(content) {
     const lines = content.split("\n");
@@ -186,6 +188,39 @@ exports.terminationPostParseHandler = onRequest({cors: true}, async (req, res) =
             res.status(400).send("Filename is required");
             return;
         }
+
+        // download the output file content
+        let content;
+        try {
+            content = await getJobFile(`${baseFilename}.out`, "result");
+        } catch (error) {
+            logger.error("Error downloading output file content, aborting. ", error);
+            res.status(500)
+                .send(error.message || "Internal Server Error");
+            return false;
+        }
+
+        const {
+            totalAtomNumber,
+            numberElectrons,
+            numberAlphaElectrons,
+            numberBetaElectrons,
+        } = extractMoleculeInput(content);
+        // Update job status with metadata
+        const metaUpdate = {};
+        if (totalAtomNumber !== null) {
+            metaUpdate.totalAtomNumber = totalAtomNumber;
+        }
+        if (numberElectrons !== null) {
+            metaUpdate.numberElectrons = numberElectrons;
+        }
+        if (numberAlphaElectrons !== null) {
+            metaUpdate.numberAlphaElectrons = numberAlphaElectrons;
+        }
+        if (numberBetaElectrons !== null) {
+            metaUpdate.numberBetaElectrons = numberBetaElectrons;
+        }
+        await updateJobMeta(`${baseFilename}.in`, "result", metaUpdate);
 
         const parseRes = await parseSimulationOutput(baseFilename);
         if (!parseRes) {

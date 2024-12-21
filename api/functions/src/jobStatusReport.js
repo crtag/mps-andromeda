@@ -120,14 +120,25 @@ exports.handler = onRequest(async (req, res) => {
 
         // parse the initial payload for Molecule Input details
         if (content && payload.offset === 0) {
-            const {totalAtomNumber, totalElectrons} = extractMoleculeInput(content);
+            const {
+                totalAtomNumber,
+                numberElectrons,
+                numberAlphaElectrons,
+                numberBetaElectrons,
+            } = extractMoleculeInput(content);
             // Update job status with metadata
             const metaUpdate = {};
             if (totalAtomNumber !== null) {
                 metaUpdate.totalAtomNumber = totalAtomNumber;
             }
-            if (totalElectrons !== null) {
-                metaUpdate.totalElectrons = totalElectrons;
+            if (numberElectrons !== null) {
+                metaUpdate.numberElectrons = numberElectrons;
+            }
+            if (numberAlphaElectrons !== null) {
+                metaUpdate.numberAlphaElectrons = numberAlphaElectrons;
+            }
+            if (numberBetaElectrons !== null) {
+                metaUpdate.numberBetaElectrons = numberBetaElectrons;
             }
             await updateJobStatus(`${filenameKey}.in`, payload.status, metaUpdate);
         }

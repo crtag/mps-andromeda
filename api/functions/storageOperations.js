@@ -169,6 +169,30 @@ async function saveJobFile(filename, content, type, metadata = {}) {
     }
 }
 
+async function updateJobMeta(filename, type, metadata = {}) {
+    try {
+        const prefix = type === "spec" ? JOBS_PREFIX : RESULTS_PREFIX;
+        const fullPath = `${prefix}${filename}`;
+        const file = getBucket().file(fullPath);
+
+        // get existing metadata
+        const [existingMetadata] = await file.getMetadata();
+
+        await file.setMetadata({
+            metadata: {
+                ...existingMetadata.metadata,
+                ...metadata,
+                timestamp: new Date().toISOString(),
+            },
+        });
+
+        return true;
+    } catch (error) {
+        logger.error("Error updating job file metadata", error);
+        throw error;
+    }
+}
+
 /**
  * Tracks normal termination status by reading the last line of .out file and updating metadata in the
  * corresponding .in file. When postScan is true, expects both files to be in RESULTS_PREFIX location,
@@ -358,11 +382,13 @@ async function parseSimulationOutput(filename) {
         logger.warn("No optimized geometry found in output file.");
     } else {
         try {
-            await saveJobFile(`${filename}.xyz`, optimizedGeometry, "result", {
+            // create a proper xyz file with the optimized geometry
+            const atomsCount = optimizedGeometry.split("\n").length;
+            const optimizedGeometryHeader = `${atomsCount}\nEnergy=${parsedResults.minimizedEnergy}\n`;
+
+            await saveJobFile(`${filename}.xyz`, optimizedGeometryHeader + optimizedGeometry, "result", {
                 timestamp: new Date().toISOString(),
-                contentType: "text/plain",
             });
-            // eslint-disable-next-line no-unused-vars
             optimizedGeometrySaved = true;
         } catch (error) {
             logger.error("Error saving optimized geometry. ", error);
@@ -436,6 +462,7 @@ module.exports = {
     listCompletedJobs,
     getJobFile,
     saveJobFile,
+    updateJobMeta,
     updateJobStatus,
     moveJobToResults,
     trackNormalTermination,

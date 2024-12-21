@@ -34,17 +34,23 @@ function extractMoleculeInput(content) {
     const section = extractSection(content, startSep, endSep, false);
 
     let totalAtomNumber = null;
-    let totalElectrons = null;
+    let numberElectrons = null;
+    let numberAlphaElectrons = null;
+    let numberBetaElectrons = null;
 
     if (section) {
         // create regex to extract total atom number and total electrons
         const atomMatch = section.match(/TOTAL ATOM NUMBER\s+=\s+(\d+)/);
-        const electronMatch = section.match(/NUMBER OF ALPHA ELECTRONS\s+=\s+(\d+)/);
+        const electronsMatch = section.match(/NUMBER OF ELECTRONS\s+=\s+(\d+)/);
+        const alphaElectronsMatch = section.match(/NUMBER OF ALPHA ELECTRONS\s+=\s+(\d+)/);
+        const betaElectronsMatch = section.match(/NUMBER OF BETA ELECTRONS\s+=\s+(\d+)/);
         totalAtomNumber = atomMatch ? parseInt(atomMatch[1]) : null;
-        totalElectrons = electronMatch ? parseInt(electronMatch[1]) : null;
+        numberElectrons = electronsMatch ? parseInt(electronsMatch[1]) : null;
+        numberAlphaElectrons = alphaElectronsMatch ? parseInt(alphaElectronsMatch[1]) : null;
+        numberBetaElectrons = betaElectronsMatch ? parseInt(betaElectronsMatch[1]) : null;
     }
 
-    return {totalAtomNumber, totalElectrons};
+    return {totalAtomNumber, numberElectrons, numberAlphaElectrons, numberBetaElectrons};
 }
 
 /**

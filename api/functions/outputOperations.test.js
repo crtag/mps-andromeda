@@ -20,14 +20,19 @@ describe("Molecule Parser Tests", () => {
     describe("extractMoleculeInput", () => {
         test("extracts correct atom number and electrons from real test file", () => {
             const result = extractMoleculeInput(successTestFileContent);
-            expect(result).toMatchSnapshot();
+            expect(result).toEqual({
+                totalAtomNumber: 31,
+                numberAlphaElectrons: 62,
+                numberBetaElectrons: 61,
+            });
         });
 
         test("returns null values for invalid input", () => {
             const result = extractMoleculeInput("invalid content");
             expect(result).toEqual({
                 totalAtomNumber: null,
-                totalElectrons: null,
+                numberAlphaElectrons: null,
+                numberBetaElectrons: null,
             });
         });
 
@@ -35,7 +40,8 @@ describe("Molecule Parser Tests", () => {
             const result = extractMoleculeInput("");
             expect(result).toEqual({
                 totalAtomNumber: null,
-                totalElectrons: null,
+                numberAlphaElectrons: null,
+                numberBetaElectrons: null,
             });
         });
     });
