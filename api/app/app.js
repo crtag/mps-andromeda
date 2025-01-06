@@ -88,7 +88,6 @@ function getDownloadLinks(job, isComplete) {
     
     const links = [];
     
-    // Add output and molden links only for completed jobs
     if (isComplete) {
         links.push({
             url: getFileUrl(baseFilename + '.out', type),
@@ -108,6 +107,12 @@ function getDownloadLinks(job, isComplete) {
                 text: 'Optimized XYZ'
             });
         }
+    } else if (job.status === 'RUNNING') {
+        links.push({
+            url: getFileUrl(baseFilename + '.out', 'result'), // exception for the running job
+            text: 'Pending Output'
+        });
+
     }
 
     return links;
@@ -156,7 +161,10 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
         return `
             <div class="job-item">
                 <div class="job-filename">
-                    <a href="${getFileUrl(job.filename, 'spec')}" class="filename-link">${job.filename}</a>
+                    
+                    <a href="${getFileUrl(
+                        isCompleted ? job.specFile : job.filename, 
+                        isCompleted ? 'result' : 'spec')}" class="filename-link">${job.filename}</a>
                     
                     ${isCompleted && job?.normalTermination ?
                         job.normalTermination === 'true' ?  
