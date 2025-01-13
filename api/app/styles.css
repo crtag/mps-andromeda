@@ -25,7 +25,7 @@ section {
 }
 
 /* Upload component */
-.drop-zone {
+.drop-zone, #cad-frame {
     width: 100%;
     height: 200px;
     border: 1px dashed #ccc;
@@ -77,10 +77,6 @@ section {
     flex-direction: column;
     gap: 5px;
     margin: 5px 0;
-}
-
-.job-filename {
-    
 }
 
 .job-spec {
@@ -143,4 +139,17 @@ h2 > div {
 
 .btn-clipboard img {
     vertical-align: text-bottom;
-} 
+}
+
+#cad-frame {
+    height: 400px;
+    cursor: default;
+    position: relative;
+    border: none;
+    border-radius: none;
+}
+
+#cad-frame > canvas {
+    border: 1px dashed #ccc;
+    border-radius: 4px;
+}
