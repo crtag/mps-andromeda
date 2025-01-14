@@ -160,8 +160,8 @@ h2 > div {
     width: 100px;
     cursor: default;
     position: absolute;
-    left: 0;
-    bottom: 0;
+    left: 10px;
+    bottom: 10px;
     border: none;
     border-radius: 0;
     z-index: 1;
@@ -169,7 +169,7 @@ h2 > div {
 
 #gizmo-frame > canvas {
     border: 1px solid #ccc;
-    border-radius: 0;
+    border-radius: 50%;
 }
 
 #axis-selector {

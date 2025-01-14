@@ -9,6 +9,7 @@ let modelXYZfileName = null;
 
 // global viewer object
 let mainViewer = null;
+let gizmoViewer = null;
 
 const elements = {
     dropZone: document.getElementById('drop-zone'),
@@ -94,7 +95,7 @@ function initCad() {
     viewer.setView(defaultView);
     mainViewer = viewer;
 
-    let gizmoViewer = $3Dmol.createViewer(gizmoFrameEl, {backgroundColor: '#FFFFFF', backgroundAlpha: 0.5, nomouse: true});
+    gizmoViewer = $3Dmol.createViewer(gizmoFrameEl, {backgroundColor: '#FFFFFF', backgroundAlpha: 0.5, nomouse: true});
 
     return {viewer, gizmoViewer};
 }
@@ -107,9 +108,9 @@ function initGizmo({viewer, gizmoViewer}) {
         gizmoViewer.render();
     });
 
-    gizmoViewer.addArrow({start: {x: 0, y: 0, z: 0}, end: {x: 5, y: 0, z: 0}, color: 'red', radius: 0.3});
-    gizmoViewer.addArrow({start: {x: 0, y: 0, z: 0}, end: {x: 0, y: 5, z: 0}, color: 'green', radius: 0.3});
-    gizmoViewer.addArrow({start: {x: 0, y: 0, z: 0}, end: {x: 0, y: 0, z: 5}, color: 'blue', radius: 0.3});
+    gizmoViewer.addArrow({start: {x: 0, y: 0, z: 0}, end: {x: 4, y: 0, z: 0}, color: 'red', radius: 0.3});
+    gizmoViewer.addArrow({start: {x: 0, y: 0, z: 0}, end: {x: 0, y: 4, z: 0}, color: 'green', radius: 0.3});
+    gizmoViewer.addArrow({start: {x: 0, y: 0, z: 0}, end: {x: 0, y: 0, z: 4}, color: 'blue', radius: 0.3});
     gizmoViewer.zoomTo();
     gizmoViewer.render();
 }
@@ -169,7 +170,7 @@ function drawLine(viewer, atom1, atom2) {
             midpos: -2.00,
         }
     );
-
+ 
     viewer.render();
 
     return arrow;
@@ -189,7 +190,7 @@ function alignModelToVec(viewer, atom1, atom2) {
 
     debugVectorAngles(atom1, atom2);
 
-    viewer.zoomTo();
+    // viewer.zoomTo();
 }
 
 // function to download model in XYZ format
@@ -366,9 +367,6 @@ function applyRotationToModel(viewer, rotationMatrix) {
         atom.y = newY;
         atom.z = newZ;
     });
-
-    // Re-render the viewer to reflect changes
-    viewer.render();
 }
 
 // Mock data
