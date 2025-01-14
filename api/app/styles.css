@@ -25,7 +25,7 @@ section {
 }
 
 /* Upload component */
-.drop-zone, #cad-frame {
+.drop-zone, #cad-frame, #gizmo-frame {
     width: 100%;
     height: 200px;
     border: 1px dashed #ccc;
@@ -142,14 +142,32 @@ h2 > div {
 }
 
 #cad-frame {
-    height: 400px;
+    height: 600px;
     cursor: default;
     position: relative;
     border: none;
-    border-radius: none;
+    border-radius: 0;
+    z-index: 0;
 }
 
 #cad-frame > canvas {
     border: 1px dashed #ccc;
     border-radius: 4px;
+}
+
+#gizmo-frame {
+    height: 100px;
+    width: 100px;
+    cursor: default;
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    border: none;
+    border-radius: 0;
+    z-index: 1;
+}
+
+#gizmo-frame > canvas {
+    border: 1px solid #ccc;
+    border-radius: 0;
 }

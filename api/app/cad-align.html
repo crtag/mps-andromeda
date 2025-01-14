@@ -9,8 +9,29 @@
 <body>
     <main>
         <section id="cad-frame">
-
+            <div id="gizmo-frame">
+            </div>
         </section>
+        <section id="alignment-frame">
+            <div id="atom1-info"></div>
+            <div id="atom2-info"></div>
+            <div id="axis-selector">
+                <label for="axis">Select Axis:</label>
+                <input type="radio" id="x-axis" name="axis" value="x">
+                <label for="x-axis">X</label>
+                <input type="radio" id="y-axis" name="axis" value="y">
+                <label for="y-axis">Y</label>
+                <input type="radio" id="z-axis" name="axis" value="z" checked>
+                <label for="z-axis">Z</label>
+            </div>
+            <div>
+                <button id="align-button">Align</button>
+            </div>
+            <div>
+                <button id="download-button">Download</button>
+            </div>
+        </section>
+
     </main>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.0.1/3Dmol.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/luxon/3.5.0/luxon.min.js" integrity="sha512-SN7iwxiJt9nFKiLayg3NjLItXPwRfBr4SQSIugMeBFrD4lIFJe1Z/exkTZYAg3Ul+AfZEGws2PQ+xSoaWfxRQQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>

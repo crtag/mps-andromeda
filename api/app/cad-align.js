@@ -1,13 +1,44 @@
 let cadFrameEl = document.getElementById('cad-frame');
+let gizmoFrameEl = document.getElementById('gizmo-frame');
 let defaultViewerStyle = {stick:{}, sphere:{radius: 0.5}, clicksphere:{radius: 0.5}};
 let selectedAtomStyle = {sphere: {color: '#FF69B4', radius: 0.75 }};
 const doubleSelectionSet = new Set();
 let alignmentLineVec = null;
 
+
 function initCad() {
-    let config = { backgroundColor: '#EEEEEE' };
-    let viewer = $3Dmol.createViewer( cadFrameEl, config );
-    return viewer;
+    let viewer = $3Dmol.createViewer(cadFrameEl, { backgroundColor: '#EEEEEE' });
+    viewer.setProjection('orthographic');
+    const defaultView = [
+        0,    // pos.x - centered
+        0,    // pos.y - centered
+        10,   // pos.z - pulled back to see scene
+        0,    // rotationGroup.z
+        0.3826834,   // q.x - ~45° rotation in X
+        0,          // q.y
+        0.3826834,   // q.z - ~45° rotation in Z
+        0.8660254    // q.w - completes the quaternion for isometric
+    ];
+    viewer.setView(defaultView);
+
+    let gizmoViewer = $3Dmol.createViewer(gizmoFrameEl, {backgroundColor: '#FFFFFF', backgroundAlpha: 0.5, nomouse: true});
+
+    return {viewer, gizmoViewer};
+}
+
+function initGizmo({viewer, gizmoViewer}) {
+    viewer.setViewChangeCallback((e) => {
+        const rotationOnly = e.slice(4);
+        const gizmoZoom = gizmoViewer.getView()[3];
+        gizmoViewer.setView([0,0,0,gizmoZoom, ...rotationOnly]);
+        gizmoViewer.render();
+    });
+
+    gizmoViewer.addArrow({start: {x: 0, y: 0, z: 0}, end: {x: 5, y: 0, z: 0}, color: 'red', radius: 0.3});
+    gizmoViewer.addArrow({start: {x: 0, y: 0, z: 0}, end: {x: 0, y: 5, z: 0}, color: 'green', radius: 0.3});
+    gizmoViewer.addArrow({start: {x: 0, y: 0, z: 0}, end: {x: 0, y: 0, z: 5}, color: 'blue', radius: 0.3});
+    gizmoViewer.zoomTo();
+    gizmoViewer.render();
 }
 
 function renderXYZdata(viewer, data) {
@@ -22,7 +53,7 @@ function renderXYZdata(viewer, data) {
 function handleAtomSelection(viewer) {
     viewer.setClickable({}, true, (atom) => {
         console.log(atom);
-        
+
         if (doubleSelectionSet.has(atom.index)) {
             doubleSelectionSet.delete(atom.index);
             viewer.setStyle({index: atom.index}, defaultViewerStyle);
@@ -30,7 +61,6 @@ function handleAtomSelection(viewer) {
             doubleSelectionSet.add(atom.index);
             viewer.setStyle({index: atom.index}, {...defaultViewerStyle, ...selectedAtomStyle});
         }
-
 
         if (doubleSelectionSet.size === 2 && !alignmentLineVec) {
             let atomsIter = doubleSelectionSet.keys();
@@ -40,12 +70,28 @@ function handleAtomSelection(viewer) {
                 viewer.removeShape(alignmentLineVec);
                 alignmentLineVec = null;
         }
-        
+        renderSelectedAtomDetails(viewer);
         viewer.render();
     });
 }
 
 function drawLine(viewer, atom1, atom2) {
+
+    debugVectorAngles(atom1, atom2);
+    const rotationMatrix = calculateAlignmentRotation(
+        atom1,  // first point
+        atom2,  // second point
+        'z'  // target axis ('x', 'y', or 'z')
+    );
+
+    console.dir(rotationMatrix);
+
+    applyRotationToModel(viewer, rotationMatrix);
+
+    debugVectorAngles(atom1, atom2);
+
+    viewer.zoomTo();
+
     return viewer.addArrow(
         {
             start: {x: atom1.x, y: atom1.y, z: atom1.z},
@@ -59,10 +105,133 @@ function drawLine(viewer, atom1, atom2) {
 
 // document onload event handler
 document.addEventListener('DOMContentLoaded', () => {
-    let viewer = initCad();
+    let {viewer, gizmoViewer} = initCad();
     renderXYZdata(viewer, mockXYZdata);
+    initGizmo({viewer, gizmoViewer});
+    renderSelectedAtomDetails(viewer);
 });
 
+// function to render selected atoms details, dealing with global doubleSelectionSet
+// should update two divs in html ID'd with atom1-info and atom2-info
+// display basic atom details like element, x, y, z
+function renderSelectedAtomDetails(viewer) {
+    let atomsIter = doubleSelectionSet.keys();
+    let atom1 = doubleSelectionSet.size > 0 ? viewer.models[0].atoms[atomsIter.next().value] : { elem: 'N/A', x: 'N/A', y: 'N/A', z: 'N/A' };
+    let atom2 = doubleSelectionSet.size > 1 ? viewer.models[0].atoms[atomsIter.next().value] : { elem: 'N/A', x: 'N/A', y: 'N/A', z: 'N/A' };
+    document.getElementById('atom1-info').innerText = `Atom 1: ${atom1.elem} (${atom1.x}, ${atom1.y}, ${atom1.z})`;
+    document.getElementById('atom2-info').innerText = `Atom 2: ${atom2.elem} (${atom2.x}, ${atom2.y}, ${atom2.z})`;
+}
+
+function debugVectorAngles(point1, point2) {
+    // Create vector from points
+    const vec1 = new $3Dmol.Vector3(point1.x, point1.y, point1.z);
+    const vec2 = new $3Dmol.Vector3(point2.x, point2.y, point2.z);
+    const direction = new $3Dmol.Vector3().subVectors(vec2, vec1);
+    direction.normalize();
+
+    // Unit vectors for each axis
+    const xAxis = new $3Dmol.Vector3(1, 0, 0);
+    const yAxis = new $3Dmol.Vector3(0, 1, 0);
+    const zAxis = new $3Dmol.Vector3(0, 0, 1);
+
+    // Calculate angles in degrees
+    const angleX = Math.acos(direction.dot(xAxis)) * (180/Math.PI);
+    const angleY = Math.acos(direction.dot(yAxis)) * (180/Math.PI);
+    const angleZ = Math.acos(direction.dot(zAxis)) * (180/Math.PI);
+
+    console.log('Vector direction:', {
+        x: direction.x.toFixed(3),
+        y: direction.y.toFixed(3),
+        z: direction.z.toFixed(3)
+    });
+    
+    console.log('Angles with axes:',
+        '\nX-axis:', angleX.toFixed(2) + '°',
+        '\nY-axis:', angleY.toFixed(2) + '°',
+        '\nZ-axis:', angleZ.toFixed(2) + '°'
+    );
+}
+
+function calculateAlignmentRotation(point1, point2, targetAxis = 'x') {
+    // Create and normalize the direction vector
+    const vec1 = new $3Dmol.Vector3(point1.x, point1.y, point1.z);
+    const vec2 = new $3Dmol.Vector3(point2.x, point2.y, point2.z);
+    const direction = new $3Dmol.Vector3().subVectors(vec2, vec1).normalize();
+
+    // Define the target axis vector
+    let targetVec;
+    switch (targetAxis.toLowerCase()) {
+        case 'x':
+            targetVec = new $3Dmol.Vector3(1, 0, 0);
+            break;
+        case 'y':
+            targetVec = new $3Dmol.Vector3(0, 1, 0);
+            break;
+        case 'z':
+            targetVec = new $3Dmol.Vector3(0, 0, 1);
+            break;
+        default:
+            throw new Error('Invalid target axis. Use "x", "y", or "z".');
+    }
+
+    // Calculate the rotation axis and angle
+    const rotAxis = new $3Dmol.Vector3().crossVectors(direction, targetVec);
+
+    // If the vectors are parallel, no rotation is needed
+    if (rotAxis.length() === 0) {
+        console.log('The vectors are already aligned. No rotation needed.');
+        return new $3Dmol.Matrix4().identity();
+    }
+
+    rotAxis.normalize();
+    const angle = Math.acos(Math.min(Math.max(direction.dot(targetVec), -1), 1));
+
+    // Create the rotation matrix using Rodrigues' formula
+    const cosAngle = Math.cos(angle);
+    const sinAngle = Math.sin(angle);
+    const oneMinusCos = 1 - cosAngle;
+
+    const { x, y, z } = rotAxis;
+
+    // Rotation matrix elements
+    const rotMatrix = new $3Dmol.Matrix4().set(
+        cosAngle + x * x * oneMinusCos, x * y * oneMinusCos - z * sinAngle, x * z * oneMinusCos + y * sinAngle, 0,
+        y * x * oneMinusCos + z * sinAngle, cosAngle + y * y * oneMinusCos, y * z * oneMinusCos - x * sinAngle, 0,
+        z * x * oneMinusCos - y * sinAngle, z * y * oneMinusCos + x * sinAngle, cosAngle + z * z * oneMinusCos, 0,
+        0, 0, 0, 1
+    );
+
+    return rotMatrix;
+}
+
+
+function applyRotationToModel(viewer, rotationMatrix) {
+    const model = viewer.getModel();
+    
+    // Get the elements of the rotation matrix
+    const elements = rotationMatrix.elements;
+
+    // Iterate through each atom in the model
+    model.selectedAtoms({}).forEach(atom => {
+        // Get the atom's current position
+        const { x, y, z } = atom;
+
+        // Apply the rotation matrix to the atom's position
+        const newX = elements[0] * x + elements[4] * y + elements[8] * z + elements[12];
+        const newY = elements[1] * x + elements[5] * y + elements[9] * z + elements[13];
+        const newZ = elements[2] * x + elements[6] * y + elements[10] * z + elements[14];
+
+        // Update the atom's position
+        atom.x = newX;
+        atom.y = newY;
+        atom.z = newZ;
+    });
+
+    // Re-render the viewer to reflect changes
+    viewer.render();
+}
+
+// Mock data
 const mockXYZdata = `115
 Energy=-16825.788078529
 Si          2.415346       3.208028       0.972056
