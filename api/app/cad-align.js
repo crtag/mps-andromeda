@@ -4,7 +4,79 @@ let defaultViewerStyle = {stick:{}, sphere:{radius: 0.5}, clicksphere:{radius: 0
 let selectedAtomStyle = {sphere: {color: '#FF69B4', radius: 0.75 }};
 const doubleSelectionSet = new Set();
 let alignmentLineVec = null;
+let alignmentAxis = null;
+let modelXYZfileName = null;
 
+// global viewer object
+let mainViewer = null;
+
+const elements = {
+    dropZone: document.getElementById('drop-zone'),
+    fileInput: document.getElementById('fileInput'),
+};
+
+// Event Handlers
+function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+
+function highlight() {
+    elements.dropZone.classList.add('drag-over');
+}
+
+function unhighlight() {
+    elements.dropZone.classList.remove('drag-over');
+}
+
+function handleDrop(e) {
+    const file = e.dataTransfer.files[0];
+    handleFile(file);
+}
+
+function handleFileSelect(e) {
+    const file = e.target.files[0];
+    handleFile(file);
+}
+
+// File Processing
+function handleFile(file) {
+    if (!file.name.endsWith('.xyz')) {
+        showStatus('Please upload a file with .xyz extension', 'error');
+        return;
+    }
+
+    // retain file name globally
+    modelXYZfileName = file.name;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const content = e.target.result;
+        console.log(content);
+        renderXYZdata(mainViewer, content);
+    };
+    reader.readAsText(file);
+}
+
+// Event Listeners
+function initializeUpload() {
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        elements.dropZone.addEventListener(eventName, preventDefaults);
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        elements.dropZone.addEventListener(eventName, highlight);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        elements.dropZone.addEventListener(eventName, unhighlight);
+    });
+
+    elements.dropZone.addEventListener('drop', handleDrop);
+    elements.dropZone.addEventListener('click', () => elements.fileInput.click());
+    elements.fileInput.addEventListener('change', handleFileSelect);
+}
 
 function initCad() {
     let viewer = $3Dmol.createViewer(cadFrameEl, { backgroundColor: '#EEEEEE' });
@@ -20,6 +92,7 @@ function initCad() {
         0.8660254    // q.w - completes the quaternion for isometric
     ];
     viewer.setView(defaultView);
+    mainViewer = viewer;
 
     let gizmoViewer = $3Dmol.createViewer(gizmoFrameEl, {backgroundColor: '#FFFFFF', backgroundAlpha: 0.5, nomouse: true});
 
@@ -42,7 +115,13 @@ function initGizmo({viewer, gizmoViewer}) {
 }
 
 function renderXYZdata(viewer, data) {
-    let model = viewer.addModel(data, "xyz");
+    // check if model already exists
+    if (viewer.models.length > 0) {
+        viewer.clear();
+        doubleSelectionSet.clear();
+    }
+    
+    viewer.addModel(data, "xyz");
     handleAtomSelection(viewer);
 
     viewer.zoomTo();
@@ -67,8 +146,8 @@ function handleAtomSelection(viewer) {
             alignmentLineVec = drawLine(viewer, viewer.models[0].atoms[atomsIter.next().value], viewer.models[0].atoms[atomsIter.next().value]);
         } 
         if (doubleSelectionSet.size < 2 && alignmentLineVec) {
-                viewer.removeShape(alignmentLineVec);
-                alignmentLineVec = null;
+            viewer.removeShape(alignmentLineVec);
+            alignmentLineVec = null;
         }
         renderSelectedAtomDetails(viewer);
         viewer.render();
@@ -76,12 +155,32 @@ function handleAtomSelection(viewer) {
 }
 
 function drawLine(viewer, atom1, atom2) {
-
+    
     debugVectorAngles(atom1, atom2);
+
+    alignModelToVec(viewer, atom1, atom2);
+
+    const arrow = viewer.addArrow(
+        {
+            start: {x: atom1.x, y: atom1.y, z: atom1.z},
+            end: { x: atom2.x, y: atom2.y, z: atom2.z},
+            color: "#40E0D0",
+            radiusRatio: 3, 
+            midpos: -2.00,
+        }
+    );
+
+    viewer.render();
+
+    return arrow;
+}
+
+function alignModelToVec(viewer, atom1, atom2) {
+    console.log(atom1, atom2, alignmentAxis);
     const rotationMatrix = calculateAlignmentRotation(
         atom1,  // first point
         atom2,  // second point
-        'z'  // target axis ('x', 'y', or 'z')
+        alignmentAxis  // target axis ('x', 'y', or 'z')
     );
 
     console.dir(rotationMatrix);
@@ -91,24 +190,65 @@ function drawLine(viewer, atom1, atom2) {
     debugVectorAngles(atom1, atom2);
 
     viewer.zoomTo();
+}
 
-    return viewer.addArrow(
-        {
-            start: {x: atom1.x, y: atom1.y, z: atom1.z},
-            end: { x: atom2.x, y: atom2.y, z: atom2.z},
-            color: "#40E0D0",
-            radiusRatio: 3, 
-            midpos: -2.00,
-        }
-    );
+// function to download model in XYZ format
+// first line a count of atoms
+// second line empty
+// third line onwards, each line is an atom with element and x, y, z coordinates down to six digits precision
+function downloadModelXYZ(viewer) {
+    let model = viewer.getModel();
+    let xyzData = `${model.selectedAtoms({}).length}\n\n`;
+    model.selectedAtoms({}).forEach(atom => {
+        xyzData += `${atom.elem}          ${atom.x.toFixed(6)}       ${atom.y.toFixed(6)}       ${atom.z.toFixed(6)}\n`;
+    });
+
+    let blob = new Blob([xyzData], {type: 'text/plain'});
+    let url = URL.createObjectURL(blob);
+    let a = document.createElement('a');
+    a.href = url;
+    a.download = `aligned-${alignmentAxis}-${modelXYZfileName}`;
+    a.click();
 }
 
 // document onload event handler
 document.addEventListener('DOMContentLoaded', () => {
+    initializeUpload();
+    
     let {viewer, gizmoViewer} = initCad();
-    renderXYZdata(viewer, mockXYZdata);
+    // renderXYZdata(viewer, mockXYZdata);
     initGizmo({viewer, gizmoViewer});
     renderSelectedAtomDetails(viewer);
+
+    document.querySelectorAll('#axis-selector > input[name="axis"]')
+    .forEach(el => {
+        el.addEventListener('change', (e) => {
+            alignmentAxis = e.target.value;
+            console.log(`Selected axis: ${alignmentAxis}`);
+        })
+    });
+    // get currently selected axis upon DOM load
+    alignmentAxis = document.querySelector('#axis-selector input[name="axis"]:checked').value;
+    console.log(`Default selected axis: ${alignmentAxis}`);
+
+    document.getElementById('download-button').addEventListener('click', () => {
+        // alert user if there's no model available and abort
+        if (viewer.models.length === 0) {
+            alert('No model available to download');
+            return;
+        }
+
+        downloadModelXYZ(viewer);
+    });
+
+    // document.getElementById('align-button').addEventListener('click', () => {
+    //     if (doubleSelectionSet.size === 2) {
+    //         const model = viewer.getModel();
+    //         const atoms = model.selectedAtoms({index: Array.from(doubleSelectionSet)});
+    //         console.log(atoms);
+    //         alignModelToVec(viewer, atoms[0], atoms[1]);
+    //     } 
+    // });
 });
 
 // function to render selected atoms details, dealing with global doubleSelectionSet
