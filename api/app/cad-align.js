@@ -220,7 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initGizmo({viewer, gizmoViewer});
     renderSelectedAtomDetails(viewer);
 
-    document.querySelectorAll('#axis-selector > input[name="axis"]')
+    document.querySelectorAll('#axis-selector input[name="axis"]')
     .forEach(el => {
         el.addEventListener('change', (e) => {
             alignmentAxis = e.target.value;
