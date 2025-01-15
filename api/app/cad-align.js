@@ -172,8 +172,13 @@ function drawLine(viewer, atom1, atom2) {
     );
  
     viewer.render();
-
     return arrow;
+}
+
+removeLine = () => {
+    mainViewer.removeShape(alignmentLineVec);
+    alignmentLineVec = null;
+    mainViewer.render();
 }
 
 function alignModelToVec(viewer, atom1, atom2) {
