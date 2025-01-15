@@ -159,7 +159,7 @@ function drawLine(viewer, atom1, atom2) {
     
     debugVectorAngles(atom1, atom2);
 
-    alignModelToVec(viewer, atom1, atom2);
+    // alignModelToVec(viewer, atom1, atom2);
 
     const arrow = viewer.addArrow(
         {
@@ -173,12 +173,6 @@ function drawLine(viewer, atom1, atom2) {
  
     viewer.render();
     return arrow;
-}
-
-removeLine = () => {
-    mainViewer.removeShape(alignmentLineVec);
-    alignmentLineVec = null;
-    mainViewer.render();
 }
 
 function alignModelToVec(viewer, atom1, atom2) {
@@ -247,14 +241,23 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadModelXYZ(viewer);
     });
 
-    // document.getElementById('align-button').addEventListener('click', () => {
-    //     if (doubleSelectionSet.size === 2) {
-    //         const model = viewer.getModel();
-    //         const atoms = model.selectedAtoms({index: Array.from(doubleSelectionSet)});
-    //         console.log(atoms);
-    //         alignModelToVec(viewer, atoms[0], atoms[1]);
-    //     } 
-    // });
+    document.getElementById('align-button').addEventListener('click', () => {
+        if (doubleSelectionSet.size === 2) {
+            const model = viewer.getModel();
+            const atoms = model.selectedAtoms({index: Array.from(doubleSelectionSet)});
+            console.log(atoms);
+            
+            alignModelToVec(viewer, atoms[0], atoms[1]);
+            viewer.removeShape(alignmentLineVec);
+            viewer.setStyle({}, defaultViewerStyle);
+            viewer.render();
+
+            alignmentLineVec = drawLine(viewer, atoms[0], atoms[1]);
+            viewer.setStyle({index: [atoms[0].index, atoms[1].index]}, {...defaultViewerStyle, ...selectedAtomStyle});
+            viewer.render();
+
+        } 
+    });
 });
 
 // function to render selected atoms details, dealing with global doubleSelectionSet

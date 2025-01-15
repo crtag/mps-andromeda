@@ -178,3 +178,16 @@ h2 > div {
     align-items: baseline;
     justify-content: space-between;
 }
+
+.btn-cad-action {
+    border: 1px solid #0066cc;
+    border-radius: 4px;
+    background: transparent;
+    color: #0066cc;
+    cursor: pointer;
+    font-size: medium;
+}
+
+.btn-cad-action#align-button {
+    margin-left: 24px;
+}
