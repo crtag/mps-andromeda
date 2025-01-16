@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QUICK Job Manager</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="cad-ctrl.css">
 </head>
 <body>
     <main>
@@ -15,6 +16,52 @@
                 <input type="file" id="fileInput" hidden accept=".xyz">
             </div>
             <div id="status" class="status" style="display: none;"></div>
+        </section>
+
+        <section class="cad-ctrl">
+            <div class="cad-ctrl-groups">
+                <div class="cad-ctrl-group">
+                    <div class="cad-ctrl-header">
+                        <span class="cad-ctrl-label">(001) • XY</span>
+                        <label class="cad-ctrl-grid">
+                            <span>grid</span>
+                            <input type="checkbox" name="grid" value="001">
+                        </label>
+                    </div>
+                    <div class="cad-ctrl-buttons">
+                        <button class="btn-cad-action" data-view="001_pos">[001]</button>
+                        <button class="btn-cad-action" data-view="001_neg">[00⁻1]</button>
+                    </div>
+                </div>
+        
+                <div class="cad-ctrl-group">
+                    <div class="cad-ctrl-header">
+                        <span class="cad-ctrl-label">(100) • YZ</span>
+                        <label class="cad-ctrl-grid">
+                            <span>grid</span>
+                            <input type="checkbox" name="grid" value="100">
+                        </label>
+                    </div>
+                    <div class="cad-ctrl-buttons">
+                        <button class="btn-cad-action" data-view="100_pos">[100]</button>
+                        <button class="btn-cad-action" data-view="100_neg">[⁻100]</button>
+                    </div>
+                </div>
+        
+                <div class="cad-ctrl-group">
+                    <div class="cad-ctrl-header">
+                        <span class="cad-ctrl-label">(010) • XZ</span>
+                        <label class="cad-ctrl-grid">
+                            <span>grid</span>
+                            <input type="checkbox" name="grid" value="010">
+                        </label>
+                    </div>
+                    <div class="cad-ctrl-buttons">
+                        <button class="btn-cad-action" data-view="010_pos">[010]</button>
+                        <button class="btn-cad-action" data-view="010_neg">[0⁻10]</button>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <a id="cad-anchor"></a>

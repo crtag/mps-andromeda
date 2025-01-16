@@ -97,6 +97,13 @@ function initCad() {
 
     gizmoViewer = $3Dmol.createViewer(gizmoFrameEl, {backgroundColor: '#FFFFFF', backgroundAlpha: 0.5, nomouse: true});
 
+    //addPlane(viewer, 'z', 0, '#CCCCCC'); // XY Plane at Z=0
+    //addPlane(viewer, 'y', 0, '#99CCFF'); // XZ Plane at Y=0
+    //addPlane(viewer, 'x', 0, '#FFCC99'); // YZ Plane at X=0
+    // zero point
+    viewer.addSphere({ center: { x: 0, y: 0, z: 0 }, radius: 0.2, color: '#FF0000' });
+    viewer.zoomTo();
+
     return {viewer, gizmoViewer};
 }
 
@@ -114,6 +121,51 @@ function initGizmo({viewer, gizmoViewer}) {
     gizmoViewer.zoomTo();
     gizmoViewer.render();
 }
+
+function addPlane(viewer, axis, position, color, gridSize = 50, gridSpacing = 4) {
+    for (let i = -gridSize; i <= gridSize; i += gridSpacing) {
+        if (axis === 'z') {
+            // XY Plane (constant Z)
+            viewer.addLine({
+                start: { x: -gridSize, y: i, z: position },
+                end: { x: gridSize, y: i, z: position },
+                color: color,
+            });
+            viewer.addLine({
+                start: { x: i, y: -gridSize, z: position },
+                end: { x: i, y: gridSize, z: position },
+                color: color,
+            });
+        } else if (axis === 'y') {
+            // XZ Plane (constant Y)
+            viewer.addLine({
+                start: { x: -gridSize, y: position, z: i },
+                end: { x: gridSize, y: position, z: i },
+                color: color,
+            });
+            viewer.addLine({
+                start: { x: i, y: position, z: -gridSize },
+                end: { x: i, y: position, z: gridSize },
+                color: color,
+            });
+        } else if (axis === 'x') {
+            // YZ Plane (constant X)
+            viewer.addLine({
+                start: { x: position, y: -gridSize, z: i },
+                end: { x: position, y: gridSize, z: i },
+                color: color,
+            });
+            viewer.addLine({
+                start: { x: position, y: i, z: -gridSize },
+                end: { x: position, y: i, z: gridSize },
+                color: color,
+            });
+        }
+    }
+    viewer.render();
+}
+
+
 
 function renderXYZdata(viewer, data) {
     // check if model already exists
@@ -188,8 +240,6 @@ function alignModelToVec(viewer, atom1, atom2) {
     applyRotationToModel(viewer, rotationMatrix);
 
     debugVectorAngles(atom1, atom2);
-
-    // viewer.zoomTo();
 }
 
 // function to download model in XYZ format
