@@ -36,6 +36,22 @@
     border-radius: 50%;
 }
 
+#translation-control {
+    margin-top: 10px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+#translation-control input {
+    width: 50px;
+}
+
+.btn-cad-action#translate-button.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
 #axis-selector {
     margin-top: 10px;
     display: flex;

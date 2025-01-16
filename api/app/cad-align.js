@@ -231,7 +231,7 @@ function renderXYZdata(viewer, data) {
 
 function handleAtomSelection(viewer) {
     viewer.setClickable({}, true, (atom) => {
-        console.log(atom);
+        console.log(`Clicked atom`, atom);
 
         if (doubleSelectionSet.has(atom.index)) {
             doubleSelectionSet.delete(atom.index);
@@ -239,7 +239,7 @@ function handleAtomSelection(viewer) {
         } else if (doubleSelectionSet.size < 2) {
             doubleSelectionSet.add(atom.index);
             viewer.setStyle({index: atom.index}, {...defaultViewerStyle, ...selectedAtomStyle});
-        }
+        } 
 
         if (doubleSelectionSet.size === 2 && !alignmentLineVec) {
             let atomsIter = doubleSelectionSet.keys();
@@ -249,6 +249,17 @@ function handleAtomSelection(viewer) {
             viewer.removeShape(alignmentLineVec);
             alignmentLineVec = null;
         }
+
+        console.log(`Selection size: ${doubleSelectionSet.size}`);
+
+        if (doubleSelectionSet.size === 1) {
+            // enable the translation button .btn-cad-action#translate-button by removing "disabled" class
+            document.querySelector('.btn-cad-action#translate-button').classList.remove('disabled');
+        } else {
+            // disable the translation button .btn-cad-action#translate-button by adding "disabled" class
+            document.querySelector('.btn-cad-action#translate-button').classList.add('disabled');
+        }
+
         renderSelectedAtomDetails(viewer);
         viewer.render();
     });
@@ -355,6 +366,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } 
     });
+
+    document.getElementById('translate-button').addEventListener('click', () => {
+        if (doubleSelectionSet.size === 1) {
+            console.log('Translating model');
+
+            let x = document.getElementById('x-translation').value;
+            let y = document.getElementById('y-translation').value;
+            let z = document.getElementById('z-translation').value;
+
+            // validate xyz and set to 0 if not a number
+            x = isNaN(x) ? 0 : parseFloat(x);
+            y = isNaN(y) ? 0 : parseFloat(y);
+            z = isNaN(z) ? 0 : parseFloat(z);
+
+            const model = viewer.getModel();
+            const atom = model.selectedAtoms({index: Array.from(doubleSelectionSet)[0]})[0];
+            console.log(`Selected atom for translation:`, atom);
+            console.log(`Translation to: {x: ${x}, y: ${y}, z: ${z}}`);
+            
+            viewer.setStyle({}, defaultViewerStyle);
+            translateModelTo(viewer, atom, {x, y, z});
+            viewer.setStyle({index: atom.index}, {...defaultViewerStyle, ...selectedAtomStyle});
+
+            viewer.render();
+        }
+    });
+
 
     // assign grid checkbox toggle for each plane
     // there are three checkboxes with attributes like name="grid" value="xz"
@@ -492,6 +530,27 @@ function applyRotationToModel(viewer, rotationMatrix) {
         atom.x = newX;
         atom.y = newY;
         atom.z = newZ;
+    });
+}
+
+function translateModelTo(viewer, atom, target) {
+    const model = viewer.getModel();
+
+    // Calculate the translation vector
+    const translationVector = new $3Dmol.Vector3(
+        target.x - atom.x,
+        target.y - atom.y,
+        target.z - atom.z
+    );
+
+    console.log('Translation vector:', translationVector);
+
+    // Iterate through each atom in the model and apply the translation
+    model.selectedAtoms({}).forEach(atom => {
+        // Update the atom's position
+        atom.x += translationVector.x;
+        atom.y += translationVector.y;
+        atom.z += translationVector.z;
     });
 }
 
