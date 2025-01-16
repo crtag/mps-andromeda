@@ -126,7 +126,7 @@ function initGizmo({viewer, gizmoViewer}) {
     gizmoViewer.render();
 }
 
-function addPlanes(viewer, hidden = true, gridSize = 50, gridSpacing = 2.5) {
+function addPlanes(viewer, hidden = true, gridSize = 50, gridSpacing = 1) {
     const xy = [], xz = [], yz = [];
     for (let i = 0; i <= gridSize; i += gridSpacing) {
         // XY Plane (constant Z)
@@ -208,7 +208,6 @@ function alignToDirection(viewer, direction) {
 
     // Apply the updated view
     viewer.setView(currentView);
-    viewer.render();
 
     console.log('Updated view:', currentView);
 }
@@ -224,7 +223,9 @@ function renderXYZdata(viewer, data) {
     let model = viewer.addModel(data, "xyz");
     handleAtomSelection(viewer);
 
-    viewer.zoomTo(model); // zoom to fit the model
+    viewer.center({});
+    viewer.zoomTo({model}, 250);
+    
     viewer.setStyle({}, defaultViewerStyle);
     viewer.render();
 }
@@ -358,6 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
             alignModelToVec(viewer, atoms[0], atoms[1]);
             viewer.removeShape(alignmentLineVec);
             viewer.setStyle({}, defaultViewerStyle);
+            viewer.zoomTo({model}, 250);
             viewer.render();
 
             alignmentLineVec = drawLine(viewer, atoms[0], atoms[1]);
@@ -389,6 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
             translateModelTo(viewer, atom, {x, y, z});
             viewer.setStyle({index: atom.index}, {...defaultViewerStyle, ...selectedAtomStyle});
 
+            viewer.zoomTo({model}, 250);
             viewer.render();
         }
     });
@@ -411,6 +414,9 @@ document.addEventListener('DOMContentLoaded', () => {
         button.addEventListener('click', event => {
             const view = event.target.getAttribute('data-view');
             alignToDirection(viewer, view);
+
+            viewer.zoomTo({model: viewer.getModel()}, 250);
+            viewer.render();
         });
     });
 
