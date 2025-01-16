@@ -139,11 +139,13 @@
 }
 
 .atom-info {
-    margin-top: 10px;
     font-family: monospace;
     padding: 4px;
-    border: 1px solid #CCCCCC;
-    border-radius: 4px;
+    z-index: 2;
+    position: absolute;
+    top: 0;
+    left:0;
+    text-align: left;
 }
 
 label {
