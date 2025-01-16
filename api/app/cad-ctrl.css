@@ -3,6 +3,7 @@
 }
 
 #cad-frame {
+    margin-bottom: 0;
     height: 500px;
     cursor: default;
     position: relative;
@@ -36,8 +37,15 @@
     border-radius: 50%;
 }
 
-#translation-control {
+.alignment-controls {
     margin-top: 10px;
+    padding: 4px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #f9f9f9;
+}
+
+#translation-control {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
@@ -75,10 +83,10 @@
 /* CAD Controls Styles */
 .cad-ctrl {
     padding: 10px;
-    border-top: 1px solid #ccc;
-    border-bottom: 1px solid #ccc;
-    background: #f7f7f7;
-    margin: 10px 0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #f9f9f9;
+    margin: 0 0 10px 0;
 }
 
 .cad-ctrl-groups {
@@ -128,4 +136,22 @@
     flex: 1;
     padding: 4px 8px;
     font-size: 0.875rem;
+}
+
+.atom-info {
+    margin-top: 10px;
+    font-family: monospace;
+    padding: 4px;
+    border: 1px solid #CCCCCC;
+    border-radius: 4px;
+}
+
+label {
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+label.cad-ctrl-grid span {
+    font-size: smaller;
+    font-weight: normal;
 }

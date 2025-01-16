@@ -366,6 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
             viewer.setStyle({index: [atoms[0].index, atoms[1].index]}, {...defaultViewerStyle, ...selectedAtomStyle});
             viewer.render();
 
+            renderSelectedAtomDetails(viewer);
         } 
     });
 
@@ -393,6 +394,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             viewer.zoomTo({model}, 250);
             viewer.render();
+
+            renderSelectedAtomDetails(viewer);
         }
     });
 
