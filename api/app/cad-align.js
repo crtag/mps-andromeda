@@ -217,7 +217,15 @@ function renderXYZdata(viewer, data) {
     // check if model already exists
     if (viewer.models.length > 0) {
         viewer.clear();
+        xyzPlanes = null;
         doubleSelectionSet.clear();
+        xyzPlanes = addPlanes(viewer);
+
+        // reset plane grids checkboxes
+        document.querySelectorAll('.plane-selector input[name="grid"]')
+        .forEach(el => {
+            el.checked = false;
+        });
     }
     
     let model = viewer.addModel(data, "xyz");
