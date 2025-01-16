@@ -182,6 +182,63 @@ function togglePlaneVisibility(viewer, plane, visible) {
     viewer.render();
 }
 
+function alignToDirection(viewer, direction) {
+    console.log(`Aligning to direction: ${direction}`);
+
+    // Step 0: Strip brackets
+    let hkl = direction.substring(1, direction.length - 1); // Remove '[' and ']'
+
+    // Step 1: Determine direction (sign)
+    let sign = hkl.includes('-') ? -1 : 1;
+    hkl = hkl.replace('-', ''); // Remove the minus sign
+
+    // Step 2: Find the index of "1" to determine the axis
+    const axisIndex = hkl.indexOf('1');
+
+    // Get the current view
+    const currentView = viewer.getView();
+    console.log(`Current view: ${currentView}`);
+
+    // Step 3: Adjust the quaternion and camera position for orthogonal alignment
+
+    // Update quaternion and camera position based on the axis
+    if (axisIndex === 0) {
+        // X-axis
+        currentView[4] = 0;      // qx
+        currentView[5] = 0.7071 * sign; // qy (flip for direction)
+        currentView[6] = 0;      // qz
+        currentView[7] = 0.7071; // qw
+        currentView[0] = sign * Math.abs(currentView[0]); // Position along X-axis
+        currentView[1] = 0; // Reset Y-axis
+        currentView[2] = 0; // Reset Z-axis
+    } else if (axisIndex === 1) {
+        // Y-axis
+        currentView[4] = 0.7071 * sign; // qx (flip for direction)
+        currentView[5] = 0;      // qy
+        currentView[6] = 0;      // qz
+        currentView[7] = 0.7071; // qw
+        currentView[1] = sign * Math.abs(currentView[1]); // Position along Y-axis
+        currentView[0] = 0; // Reset X-axis
+        currentView[2] = 0; // Reset Z-axis
+    } else if (axisIndex === 2) {
+        // Z-axis
+        currentView[4] = 0;    // qx
+        currentView[5] = 0;    // qy
+        currentView[6] = 0.7071 * sign; // qz (flip for direction)
+        currentView[7] = 0.7071; // qw
+        currentView[2] = sign * Math.abs(currentView[2]); // Position along Z-axis
+        currentView[0] = 0; // Reset X-axis
+        currentView[1] = 0; // Reset Y-axis
+    }
+
+    // Apply the updated view
+    viewer.setView(currentView);
+    viewer.render();
+
+    console.log('Updated view:', currentView);
+}
+
+
 function renderXYZdata(viewer, data) {
     // check if model already exists
     if (viewer.models.length > 0) {
@@ -333,6 +390,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const visible = e.target.checked;
             togglePlaneVisibility(viewer, plane, visible);
             console.log(`Toggled ${plane} plane visibility: ${visible}`);
+        });
+    });
+
+    // Attach event listeners to plane views buttons
+    document.querySelectorAll('.view .direction-selector').forEach(button => {
+        button.addEventListener('click', event => {
+            const view = event.target.getAttribute('data-view');
+            alignToDirection(viewer, view);
         });
     });
 
