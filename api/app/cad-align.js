@@ -6,6 +6,7 @@ const doubleSelectionSet = new Set();
 let alignmentLineVec = null;
 let alignmentAxis = null;
 let modelXYZfileName = null;
+let xyzPlanes = null;
 
 // global viewer object
 let mainViewer = null;
@@ -97,12 +98,15 @@ function initCad() {
 
     gizmoViewer = $3Dmol.createViewer(gizmoFrameEl, {backgroundColor: '#FFFFFF', backgroundAlpha: 0.5, nomouse: true});
 
-    //addPlane(viewer, 'z', 0, '#CCCCCC'); // XY Plane at Z=0
-    //addPlane(viewer, 'y', 0, '#99CCFF'); // XZ Plane at Y=0
-    //addPlane(viewer, 'x', 0, '#FFCC99'); // YZ Plane at X=0
+    // add hidden grid planes
+    xyzPlanes = addPlanes(viewer);
     // zero point
-    viewer.addSphere({ center: { x: 0, y: 0, z: 0 }, radius: 0.2, color: '#FF0000' });
-    viewer.zoomTo();
+    viewer.addLine({start:{x:-0.5,y:0,z:0},end:{x:0.5,y:0,z:0}, color: '#FF0000' });
+    viewer.addLine({start:{x:0,y:-0.5,z:0},end:{x:0,y:0.5,z:0}, color: '#FF0000' });
+    viewer.addLine({start:{x:0,y:0,z:-0.5},end:{x:0,y:0,z:0.5}, color: '#FF0000' });
+    viewer.addLabel('0,0,0', { alignment: 'bottomRight', showBackground: false, fontSize: 8, fontColor: '#FF0000', borderColor: '#FF0000', borderThickness: 0.1, position: { x: 0, y: 0, z: 0 }, backgroundColor: 'white' });
+    viewer.render();
+    viewer.center();
 
     return {viewer, gizmoViewer};
 }
@@ -122,50 +126,61 @@ function initGizmo({viewer, gizmoViewer}) {
     gizmoViewer.render();
 }
 
-function addPlane(viewer, axis, position, color, gridSize = 50, gridSpacing = 4) {
+function addPlanes(viewer, hidden = true, gridSize = 50, gridSpacing = 4) {
+    const xy = [];
+    const xz = [];
+    const yz = [];
+    
     for (let i = -gridSize; i <= gridSize; i += gridSpacing) {
-        if (axis === 'z') {
-            // XY Plane (constant Z)
-            viewer.addLine({
-                start: { x: -gridSize, y: i, z: position },
-                end: { x: gridSize, y: i, z: position },
-                color: color,
-            });
-            viewer.addLine({
-                start: { x: i, y: -gridSize, z: position },
-                end: { x: i, y: gridSize, z: position },
-                color: color,
-            });
-        } else if (axis === 'y') {
-            // XZ Plane (constant Y)
-            viewer.addLine({
-                start: { x: -gridSize, y: position, z: i },
-                end: { x: gridSize, y: position, z: i },
-                color: color,
-            });
-            viewer.addLine({
-                start: { x: i, y: position, z: -gridSize },
-                end: { x: i, y: position, z: gridSize },
-                color: color,
-            });
-        } else if (axis === 'x') {
-            // YZ Plane (constant X)
-            viewer.addLine({
-                start: { x: position, y: -gridSize, z: i },
-                end: { x: position, y: gridSize, z: i },
-                color: color,
-            });
-            viewer.addLine({
-                start: { x: position, y: i, z: -gridSize },
-                end: { x: position, y: i, z: gridSize },
-                color: color,
-            });
-        }
+        // XY Plane (constant Z)
+        xy.push(viewer.addLine({
+            start: { x: -gridSize, y: i, z: 0 },
+            end: { x: gridSize, y: i, z: 0 },
+            color: '#CCCCCC',
+            hidden,
+        }));
+        xy.push(viewer.addLine({
+            start: { x: i, y: -gridSize, z: 0 },
+            end: { x: i, y: gridSize, z: 0 },
+            color: '#CCCCCC',
+            hidden,
+        }));
+        // XZ Plane (constant Y)
+        xz.push(viewer.addLine({
+            start: { x: -gridSize, y: 0, z: i },
+            end: { x: gridSize, y: 0, z: i },
+            color: '#99CCFF',
+            hidden,
+        }));
+        xz.push(viewer.addLine({
+            start: { x: i, y: 0, z: -gridSize },
+            end: { x: i, y: 0, z: gridSize },
+            color: '#99CCFF',
+            hidden,
+        }));
+        // YZ Plane (constant X)
+        yz.push(viewer.addLine({
+            start: { x: 0, y: -gridSize, z: i },
+            end: { x: 0, y: gridSize, z: i },
+            color: '#FFCC99',
+            hidden,
+        }));
+        yz.push(viewer.addLine({
+            start: { x: 0, y: i, z: -gridSize },
+            end: { x: 0, y: i, z: gridSize },
+            color: '#FFCC99',
+            hidden,
+        }));
     }
     viewer.render();
+    return { xy, xz, yz };
 }
 
-
+function togglePlaneVisibility(viewer, plane, visible) {
+    console.log(`Toggling ${plane} plane visibility: ${visible}`);
+    xyzPlanes[plane].forEach(line => line.updateStyle({ hidden: !visible }));
+    viewer.render();
+}
 
 function renderXYZdata(viewer, data) {
     // check if model already exists
@@ -308,6 +323,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } 
     });
+
+    // assign grid checkbox toggle for each plane
+    // there are three checkboxes with attributes like name="grid" value="xz"
+    document.querySelectorAll('.plane-selector input[name="grid"]')
+    .forEach(el => {
+        el.addEventListener('change', (e) => {
+            const plane = e.target.value;
+            const visible = e.target.checked;
+            togglePlaneVisibility(viewer, plane, visible);
+            console.log(`Toggled ${plane} plane visibility: ${visible}`);
+        });
+    });
+
 });
 
 // function to render selected atoms details, dealing with global doubleSelectionSet
