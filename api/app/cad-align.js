@@ -126,51 +126,26 @@ function initGizmo({viewer, gizmoViewer}) {
     gizmoViewer.render();
 }
 
-function addPlanes(viewer, hidden = true, gridSize = 50, gridSpacing = 4) {
-    const xy = [];
-    const xz = [];
-    const yz = [];
-    
-    for (let i = -gridSize; i <= gridSize; i += gridSpacing) {
+function addPlanes(viewer, hidden = true, gridSize = 50, gridSpacing = 2.5) {
+    const xy = [], xz = [], yz = [];
+    for (let i = 0; i <= gridSize; i += gridSpacing) {
         // XY Plane (constant Z)
-        xy.push(viewer.addLine({
-            start: { x: -gridSize, y: i, z: 0 },
-            end: { x: gridSize, y: i, z: 0 },
-            color: '#CCCCCC',
-            hidden,
-        }));
-        xy.push(viewer.addLine({
-            start: { x: i, y: -gridSize, z: 0 },
-            end: { x: i, y: gridSize, z: 0 },
-            color: '#CCCCCC',
-            hidden,
-        }));
+        xy.push(viewer.addLine({ start: { x: -i, y: -gridSize, z: 0 }, end: { x: -i, y: gridSize, z: 0 }, color: '#CCCCCC', hidden }));
+        xy.push(viewer.addLine({ start: { x: i, y: -gridSize, z: 0 }, end: { x: i, y: gridSize, z: 0 }, color: '#CCCCCC', hidden }));
+        xy.push(viewer.addLine({ start: { x: -gridSize, y: -i, z: 0 }, end: { x: gridSize, y: -i, z: 0 }, color: '#CCCCCC', hidden }));
+        xy.push(viewer.addLine({ start: { x: -gridSize, y: i, z: 0 }, end: { x: gridSize, y: i, z: 0 }, color: '#CCCCCC', hidden }));
+
         // XZ Plane (constant Y)
-        xz.push(viewer.addLine({
-            start: { x: -gridSize, y: 0, z: i },
-            end: { x: gridSize, y: 0, z: i },
-            color: '#99CCFF',
-            hidden,
-        }));
-        xz.push(viewer.addLine({
-            start: { x: i, y: 0, z: -gridSize },
-            end: { x: i, y: 0, z: gridSize },
-            color: '#99CCFF',
-            hidden,
-        }));
+        xz.push(viewer.addLine({ start: { x: -i, y: 0, z: -gridSize }, end: { x: -i, y: 0, z: gridSize }, color: '#99CCFF', hidden }));
+        xz.push(viewer.addLine({ start: { x: i, y: 0, z: -gridSize }, end: { x: i, y: 0, z: gridSize }, color: '#99CCFF', hidden }));
+        xz.push(viewer.addLine({ start: { x: -gridSize, y: 0, z: -i }, end: { x: gridSize, y: 0, z: -i }, color: '#99CCFF', hidden }));
+        xz.push(viewer.addLine({ start: { x: -gridSize, y: 0, z: i }, end: { x: gridSize, y: 0, z: i }, color: '#99CCFF', hidden }));
+
         // YZ Plane (constant X)
-        yz.push(viewer.addLine({
-            start: { x: 0, y: -gridSize, z: i },
-            end: { x: 0, y: gridSize, z: i },
-            color: '#FFCC99',
-            hidden,
-        }));
-        yz.push(viewer.addLine({
-            start: { x: 0, y: i, z: -gridSize },
-            end: { x: 0, y: i, z: gridSize },
-            color: '#FFCC99',
-            hidden,
-        }));
+        yz.push(viewer.addLine({ start: { x: 0, y: -i, z: -gridSize }, end: { x: 0, y: -i, z: gridSize }, color: '#FFCC99', hidden }));
+        yz.push(viewer.addLine({ start: { x: 0, y: i, z: -gridSize }, end: { x: 0, y: i, z: gridSize }, color: '#FFCC99', hidden }));
+        yz.push(viewer.addLine({ start: { x: 0, y: -gridSize, z: -i }, end: { x: 0, y: gridSize, z: -i }, color: '#FFCC99', hidden }));
+        yz.push(viewer.addLine({ start: { x: 0, y: -gridSize, z: i }, end: { x: 0, y: gridSize, z: i }, color: '#FFCC99', hidden }));
     }
     viewer.render();
     return { xy, xz, yz };
@@ -246,10 +221,10 @@ function renderXYZdata(viewer, data) {
         doubleSelectionSet.clear();
     }
     
-    viewer.addModel(data, "xyz");
+    let model = viewer.addModel(data, "xyz");
     handleAtomSelection(viewer);
 
-    viewer.zoomTo();
+    viewer.zoomTo(model); // zoom to fit the model
     viewer.setStyle({}, defaultViewerStyle);
     viewer.render();
 }
