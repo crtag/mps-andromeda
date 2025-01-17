@@ -499,8 +499,8 @@ function calculateAlignmentRotation(point1, point2, targetAxis = 'x') {
     // Calculate the rotation axis and angle
     const rotAxis = new $3Dmol.Vector3().crossVectors(direction, targetVec);
 
-    // If the vectors are parallel, no rotation is needed
-    if (rotAxis.length() === 0) {
+    // If the vectors are parallel, no rotation is needed. Essentially very small angle.
+    if (rotAxis.length() < 10e-12) {
         console.log('The vectors are already aligned. No rotation needed.');
         return new $3Dmol.Matrix4().identity();
     }
@@ -522,6 +522,29 @@ function calculateAlignmentRotation(point1, point2, targetAxis = 'x') {
         z * x * oneMinusCos - y * sinAngle, z * y * oneMinusCos + x * sinAngle, cosAngle + z * z * oneMinusCos, 0,
         0, 0, 0, 1
     );
+
+    // Suppose rotMatrix is your rotation matrix (already computed).
+    // We want to check R^T * R to verify orthonormality.
+
+    // 1) Clone the original matrix into a new Matrix4, so we don't mutate the original
+    const Rclone = new $3Dmol.Matrix4();
+    Rclone.copy(rotMatrix);
+
+    // 2) Transpose in place; now Rclone == R^T
+    Rclone.transpose();
+
+    // 3) Multiply (R^T) by the original R
+    const RTR = new $3Dmol.Matrix4();                          // another fresh matrix
+    RTR.multiplyMatrices(Rclone, rotMatrix);            // RTR = R^T * R
+
+    // 4) Now log the elements. For a perfect rotation, R^T * R ≈ Identity.
+    console.log("R^T * R (should be close to identity):", RTR.elements);
+
+    // 5) (Optional) Check the 3×3 sub-determinant to confirm det(R) ≈ +1.
+    const rotMat3 = rotMatrix.matrix3FromTopLeft();     // top-left 3×3
+    const det3 = rotMat3.getDeterminant();
+    console.log("det(R) (3×3) ~", det3);                // Should be near +1
+
 
     return rotMatrix;
 }
