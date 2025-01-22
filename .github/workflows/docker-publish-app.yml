@@ -1,4 +1,4 @@
-name: Manually Publish Managed QUICK Docker Image
+name: Manually Publish QUICK appplication Docker Image
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      DOCKER_IMAGE_NAME: crtag/quick-app-managed 
+      DOCKER_IMAGE_NAME: crtag/quick-app 
 
     steps:
       - name: Checkout repository
@@ -45,5 +45,5 @@ jobs:
       - name: Build and push image
         if: steps.extract_version.outcome == 'success'
         run: |
-          docker build -t $DOCKER_IMAGE_NAME:${{ env.DOCKER_IMAGE_VERSION }} -f QUICK/Dockerfile.managed .
+          docker build -t $DOCKER_IMAGE_NAME:${{ env.DOCKER_IMAGE_VERSION }} -f QUICK/Dockerfile .
           docker push $DOCKER_IMAGE_NAME:${{ env.DOCKER_IMAGE_VERSION }}

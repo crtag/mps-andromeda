@@ -80,14 +80,12 @@ jobs:
       - name: Build and push Image 1
         if: steps.extract_versions.outcome == 'success'
         run: |
-          docker build -t $DOCKER_IMAGE_NAME1:${{ env.DOCKER_IMAGE_VERSION1 }} -t $DOCKER_IMAGE_NAME1:latest -f QUICK/Dockerfile .
+          docker build -t $DOCKER_IMAGE_NAME1:${{ env.DOCKER_IMAGE_VERSION1 }} -f QUICK/Dockerfile .
           docker push $DOCKER_IMAGE_NAME1:${{ env.DOCKER_IMAGE_VERSION1 }}
-          docker push $DOCKER_IMAGE_NAME1:latest
 
       # Build and push Image 2 with extracted version
       - name: Build and push Image 2
         if: steps.extract_versions.outcome == 'success'
         run: |
-          docker build -t $DOCKER_IMAGE_NAME2:${{ env.DOCKER_IMAGE_VERSION2 }} -t $DOCKER_IMAGE_NAME2:latest -f QUICK/Dockerfile.managed .
+          docker build -t $DOCKER_IMAGE_NAME2:${{ env.DOCKER_IMAGE_VERSION2 }} -f QUICK/Dockerfile.managed .
           docker push $DOCKER_IMAGE_NAME2:${{ env.DOCKER_IMAGE_VERSION2 }}
-          docker push $DOCKER_IMAGE_NAME2:latest

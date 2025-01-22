@@ -15,6 +15,22 @@ spec:
         app: quick-app
     spec:
       restartPolicy: Always
+
+      tolerations:
+      - key: "node.kubernetes.io/not-ready"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 300
+      - key: "node.kubernetes.io/unreachable"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 86400
+      - key: "node.kubernetes.io/network-unavailable"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 86400
+
+      terminationGracePeriodSeconds: 300
       containers:
       - name: quick-app
         image: crtag/quick-app-managed:latest
@@ -22,25 +38,38 @@ spec:
         livenessProbe:
           exec:
             command:
-            - /bin/bash
-            - -c
-            - >
-              ! pgrep -x quick.cuda.MPI || 
-              (pgrep -x quick.cuda.MPI | xargs -I {} ps -o state= -p {} | grep -vq '^Z')
-          initialDelaySeconds: 30
-          periodSeconds: 15
-          timeoutSeconds: 5
-          failureThreshold: 2
+              - /bin/bash
+              - -c
+              - |
+                # Pass if no MPI process (waiting for jobs)
+                if ! pgrep -x quick.cuda.MPI > /dev/null; then
+                  exit 0
+                fi
+                # If process exists, check if it's zombie
+                if pgrep -x quick.cuda.MPI | xargs -I {} ps -o state= -p {} | grep -q '^Z'; then
+                  # Found zombie process, fail the probe
+                  exit 1
+                fi
+                # Process exists and is not zombie - pass
+                exit 0
+          initialDelaySeconds: 180
+          periodSeconds: 120
+          timeoutSeconds: 10
+          failureThreshold: 3
         readinessProbe:
           exec:
             command:
             - /bin/bash
             - -c
-            - >
-              ! pgrep -x quick.cuda.MPI || 
-              (pgrep -x quick.cuda.MPI | xargs -I {} ps -o state= -p {} | grep -vq '^Z')
-          periodSeconds: 10
-          timeoutSeconds: 5
+            - |
+              # Container is ready if either:
+              # 1. No MPI process (waiting for jobs)
+              # 2. MPI process exists and is not zombie
+              ! pgrep -x quick.cuda.MPI > /dev/null || \
+              ! pgrep -x quick.cuda.MPI | xargs -I {} ps -o state= -p {} | grep -q '^Z'
+          initialDelaySeconds: 180
+          periodSeconds: 120
+          timeoutSeconds: 10
           failureThreshold: 3
         env:
         - name: GOOGLE_CLOUD_SA_KEY # Google Cloud Service Account Key JSON
@@ -68,7 +97,7 @@ spec:
           mountPath: /mnt/shared-disk
         resources:
           limits:
-            nvidia.com/gpu: 1 
+            nvidia.com/gpu: 1
       volumes:
       - name: andromeda-shared-disk
         persistentVolumeClaim:

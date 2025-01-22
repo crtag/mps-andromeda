@@ -18,7 +18,10 @@ async function getMostRecentPendingJob() {
 
     try {
         const content = await getJobFile(job.filename, "spec");
-        await updateJobStatus(job.filename, "RUNNING");
+        // this is the start of simulation
+        await updateJobStatus(job.filename, "RUNNING", {
+            startTime: new Date().toISOString(),
+        });
 
         return {
             filename: job.filename,

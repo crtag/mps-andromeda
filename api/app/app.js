@@ -9,7 +9,7 @@ const API = {
 };
 
 const REFRESH_INTERVAL = 300000; // 300 seconds
-const COMPLETED_JOBS_LIMIT = 25;
+const COMPLETED_JOBS_LIMIT = 75;
 
 // DOM Elements
 const elements = {
@@ -88,22 +88,31 @@ function getDownloadLinks(job, isComplete) {
     
     const links = [];
     
-    // Add output and molden links only for completed jobs
     if (isComplete) {
         links.push({
             url: getFileUrl(baseFilename + '.out', type),
             text: 'Output'
         });
+
+        if (job?.jobSpec && job?.jobSpec.toUpperCase().includes('EXPORT=MOLDEN')) {
+            links.push({
+                url: getFileUrl(baseFilename + '.molden', type),
+                text: 'Molden'
+            });
+        }
+
+        if (job?.optimizedGeometrySaved === 'true') {
+            links.push({
+                url: getFileUrl(baseFilename + '.xyz', type),
+                text: 'Optimized XYZ'
+            });
+        }
+    } else if (job.status === 'RUNNING') {
         links.push({
-            url: getFileUrl(baseFilename + '.molden', type),
-            text: 'Molden'
+            url: getFileUrl(baseFilename + '.out', 'result'), // exception for the running job
+            text: 'Pending Output'
         });
-    } else {
-        // Input file link
-        links.push({
-            url: getFileUrl(job.filename, type),
-            text: 'Input'
-        });
+
     }
 
     return links;
@@ -151,18 +160,59 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
 
         return `
             <div class="job-item">
-                <div class="job-filename">${job.filename}</div>
-                <div class="job-time">
-                    ${isCompleted && job?.completionTime ? `Completed: ${new Date(job.completionTime).toLocaleString()}` : ''}
-                    ${job?.submitTime ? `<br>Submitted: ${new Date(job.submitTime).toLocaleString()}` : ''}
-                    ${job?.lastUpdate ? `<br>Last updated: ${new Date(job.lastUpdate).toLocaleString()}` : ''}
+                <div class="job-filename">
                     
-                    ${(!isCompleted && job?.submitTime && job?.lastUpdate) ? `<br>Run duration: 
+                    <a href="${getFileUrl(
+                        isCompleted ? job.specFile : job.filename, 
+                        isCompleted ? 'result' : 'spec')}" class="filename-link">${job.filename}</a>
+                    
+                    ${isCompleted && job?.normalTermination ?
+                        job.normalTermination === 'true' ?  
+                            `<span class="normal-termination true">&#10004; successful run</span>` :
+                            `<span class="normal-termination false">&#9888; aborted run</span>` : ''
+                    }
+
+                    ${isCompleted && job?.normalTermination && job.normalTermination === 'false' ?
+                        job?.lastOutputLine?.includes("Error Termination.") ?
+                            `<div class="error-termination-reason">${job.lastOutputLine}</div>` :
+                            `<div class="error-termination-reason">Unknown Termination Reason.</div>` : ''
+                    }
+                </div>
+                
+                <div class="job-time">
+                    ${job?.submitTime ? `Submitted: ${new Date(job.submitTime).toLocaleString()}` : ''}    
+                    ${!isCompleted && job?.startTime ? `<br>Started: ${new Date(job.startTime).toLocaleString()}` : ''}
+                    ${isCompleted && job?.completionTime ? `&emsp; Completed: ${new Date(job.completionTime).toLocaleString()}` : ''}
+
+                    ${!isCompleted && job?.lastUpdate ? `<br>Last updated: ${new Date(job.lastUpdate).toLocaleString()}` : ''}
+
+                    ${(!isCompleted && job?.startTime && job?.lastUpdate) ? `<br>Run duration: 
                         ${luxon.Duration
-                            .fromMillis(new Date(job.lastUpdate).getTime() - new Date(job.submitTime).getTime())
+                            .fromMillis(new Date(job.lastUpdate).getTime() - new Date(job.startTime).getTime())
                             .toFormat("d 'days' h 'hrs' m 'mins'")}` : ''}
                     
                 </div>
+
+                ${job?.jobSpec ? 
+                    `<div class="job-spec">${job.jobSpec}
+                        ${isCompleted ? `
+                            <button title="Copy to clipboard: \n${job.filename}, ${job.jobSpec.trim()}, ${job?.totalAtomNumber || ''}, ${job?.numberElectrons || ''}, ${job?.numberAlphaElectrons || ''}, ${job?.numberBetaElectrons || ''}, ${job?.minimizedEnergy || ''}, ${job?.totalTime || ''}" class="btn-clipboard" onclick="(async () => await navigator.clipboard.writeText(\`${job.filename}, ${job.jobSpec.trim()}, ${job?.totalAtomNumber || ''}, ${job?.numberElectrons || ''}, ${job?.numberAlphaElectrons || ''}, ${job?.numberBetaElectrons || ''}, ${job?.minimizedEnergy || ''}, ${job?.totalTime || ''}" class="btn-clipboard" onclick="(async () => await navigator.clipboard.writeText(\`${job.filename}, ${job.jobSpec.trim()}, ${job?.totalAtomNumber || ''}, ${job?.numberAlphaElectrons || ''}, ${job?.numberBetaElectrons || ''}, ${job?.minimizedEnergy || ''}, ${job?.totalTime || ''}\`))()">
+                                <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAACXBIWXMAAAsTAAALEwEAmpwYAAAALElEQVR4nGNgIAuknfmPF2MArIL4QBpUA9E2pSFpIGTosNEAA2RpICkCiQAAL4ZePPv+G+QAAAAASUVORK5CYII=" alt="copy">
+                            </button>
+                         `: ''
+                        }
+                    </div>` 
+                    : ''
+                }
+                <div class="job-results">
+                    ${job?.totalAtomNumber ? `TOTAL ATOM NUMBER: ${job.totalAtomNumber}` : ''}
+                    ${job?.numberElectrons ? `<br>NUMBER OF ELECTRONS: ${job.numberElectrons}` : ''}
+                    ${job?.numberAlphaElectrons ? `<br>NUMBER OF ALPHA ELECTRONS: ${job.numberAlphaElectrons}` : ''}
+                    ${job?.numberBetaElectrons ? `<br>NUMBER OF BETA ELECTRONS: ${job.numberBetaElectrons}` : ''}
+                    ${job?.minimizedEnergy ? `<br>MINIMIZED ENERGY: ${job.minimizedEnergy}` : ''}
+                    ${job?.totalTime ? `<br>TOTAL TIME: ${job.totalTime}` : ''}
+                </div>
+
                 <div class="job-files">${linksHtml}</div>
             </div>
         `;
@@ -220,5 +270,5 @@ document.addEventListener('DOMContentLoaded', () => {
     startPolling();
 
     // add content to completed jobs subtitle
-    elements.completedJobsSubtitle.textContent = `(last ${COMPLETED_JOBS_LIMIT} max)`;
+    elements.completedJobsSubtitle.textContent = `(last ${COMPLETED_JOBS_LIMIT} only)`;
 });

@@ -5,7 +5,11 @@ const {
     listCompletedJobs,
     getJobFile,
     saveJobFile,
+    trackNormalTermination,
+    parseSimulationOutput,
+    updateJobMeta,
 } = require("../storageOperations");
+const {extractMoleculeInput} = require("../outputOperations");
 
 async function validateJobSpec(content) {
     const lines = content.split("\n");
@@ -118,10 +122,14 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
             .slice(0, 12); // Take first 12 digits (enough for uniqueness)
         const filename = `${safeFilename}_${timestamp}.in`;
 
+        // extract the first line of the file to use as the job spec in metadata
+        const jobSpec = content.split("\n")[0];
+
         // Save to storage
         await saveJobFile(filename, content, "spec", {
             status: "PENDING",
-            submitTime: timestamp,
+            submitTime: new Date().toISOString(),
+            jobSpec,
         });
 
         res.status(200).json({
@@ -136,4 +144,95 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
             message: "Error uploading job spec",
         });
     }
+});
+
+exports.terminationPostScanHandler = onRequest({cors: true}, async (req, res) => {
+    if (req.method !== "POST") {
+        res.status(405).send("Method Not Allowed");
+        return;
+    }
+
+    try {
+        const baseFilename = req.body.filename;
+
+        if (!baseFilename) {
+            res.status(400).send("Filename is required");
+            return;
+        }
+
+        const trackRes = await trackNormalTermination(baseFilename, true);
+        if (!trackRes) {
+            res.status(500).send("Job output tracking failed");
+            return;
+        }
+    } catch (error) {
+        logger.error("Error while post scanning", error);
+        res.status(500)
+            .send(error.message || "Internal Server Error");
+        return;
+    }
+
+    res.status(200).send("OK");
+});
+
+exports.terminationPostParseHandler = onRequest({cors: true}, async (req, res) => {
+    if (req.method !== "POST") {
+        res.status(405).send("Method Not Allowed");
+        return;
+    }
+
+    try {
+        const baseFilename = req.body.filename;
+
+        if (!baseFilename) {
+            res.status(400).send("Filename is required");
+            return;
+        }
+
+        // download the output file content
+        let content;
+        try {
+            content = await getJobFile(`${baseFilename}.out`, "result");
+        } catch (error) {
+            logger.error("Error downloading output file content, aborting. ", error);
+            res.status(500)
+                .send(error.message || "Internal Server Error");
+            return false;
+        }
+
+        const {
+            totalAtomNumber,
+            numberElectrons,
+            numberAlphaElectrons,
+            numberBetaElectrons,
+        } = extractMoleculeInput(content);
+        // Update job status with metadata
+        const metaUpdate = {};
+        if (totalAtomNumber !== null) {
+            metaUpdate.totalAtomNumber = totalAtomNumber;
+        }
+        if (numberElectrons !== null) {
+            metaUpdate.numberElectrons = numberElectrons;
+        }
+        if (numberAlphaElectrons !== null) {
+            metaUpdate.numberAlphaElectrons = numberAlphaElectrons;
+        }
+        if (numberBetaElectrons !== null) {
+            metaUpdate.numberBetaElectrons = numberBetaElectrons;
+        }
+        await updateJobMeta(`${baseFilename}.in`, "result", metaUpdate);
+
+        const parseRes = await parseSimulationOutput(baseFilename);
+        if (!parseRes) {
+            res.status(500).send("Job output parsing failed");
+            return;
+        }
+    } catch (error) {
+        logger.error("Error while post parsing", error);
+        res.status(500)
+            .send(error.message || "Internal Server Error");
+        return;
+    }
+
+    res.status(200).send("OK");
 });

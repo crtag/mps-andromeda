@@ -1,0 +1,159 @@
+.drop-zone {
+    height: 100px;
+}
+
+#cad-frame {
+    margin-bottom: 0;
+    height: 500px;
+    cursor: default;
+    position: relative;
+    border: none;
+    border-radius: 0;
+    z-index: 0;
+}
+
+#cad-frame > canvas {
+    border: 1px dashed #ccc;
+    border-radius: 4px;
+}
+
+#gizmo-frame {
+    height: 100px;
+    width: 100px;
+    cursor: default;
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    border: none;
+    z-index: 1;
+    border-radius: 50%; /* Ensure it's perfectly round */
+    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.6), rgba(0, 0, 0, 0.3));
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5), 0 4px 6px rgba(0, 0, 0, 0.3);
+    overflow: hidden; /* Keep everything inside the sphere */
+}
+
+#gizmo-frame > canvas {
+    border: 1px solid #ccc;
+    border-radius: 50%;
+}
+
+.alignment-controls {
+    margin-top: 10px;
+    padding: 4px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #f9f9f9;
+}
+
+#translation-control {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+#translation-control input {
+    width: 50px;
+}
+
+.btn-cad-action#translate-button.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+#axis-selector {
+    margin-top: 10px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+.btn-cad-action {
+    border: 1px solid #0066cc;
+    border-radius: 4px;
+    background: transparent;
+    color: #0066cc;
+    cursor: pointer;
+    font-size: medium;
+}
+
+.btn-cad-action#align-button {
+    margin-left: 24px;
+}
+
+/* CAD Controls Styles */
+.cad-ctrl {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #f9f9f9;
+    margin: 0 0 10px 0;
+}
+
+.cad-ctrl-groups {
+    display: flex;
+    gap: 24px;
+    justify-content: space-between;
+}
+
+.cad-ctrl-group {
+    flex: 1;
+}
+
+.cad-ctrl-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.cad-ctrl-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.cad-ctrl-grid {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+}
+
+.cad-ctrl-grid span {
+    font-size: 0.75rem;
+}
+
+.cad-ctrl-grid input[type="checkbox"] {
+    margin: 0;
+}
+
+.cad-ctrl-buttons {
+    display: flex;
+    gap: 4px;
+    justify-content: space-between;
+}
+
+.cad-ctrl-buttons .btn-cad-action {
+    flex: 1;
+    padding: 4px 8px;
+    font-size: 0.875rem;
+}
+
+.atom-info {
+    font-family: monospace;
+    padding: 4px;
+    z-index: 2;
+    position: absolute;
+    top: 0;
+    left:0;
+    text-align: left;
+}
+
+label {
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+label.cad-ctrl-grid span {
+    font-size: smaller;
+    font-weight: normal;
+}

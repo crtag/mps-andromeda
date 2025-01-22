@@ -7,6 +7,7 @@ DEFAULT_GCP_BUCKET_PREFIX="job-results"
 
 # Trap SIGCHLD to ensure terminated background processes are cleaned up
 trap 'wait' SIGCHLD
+trap 'log_message "Received shutdown signal"; exit 0' SIGTERM
 
 # Check if shared directory is set or use default
 if [[ -z "${SHARED_DIR}" ]]; then
@@ -42,8 +43,16 @@ log_message() {
     local message="$1"
     local timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
 
-    echo "[$timestamp] $message"   # Output to console
+    # echo "[$timestamp] $message"   # Output to console
     echo "[$timestamp] $message" >> "$LOG_FILE"  # Append to log file
+}
+
+truncate_old_logs() {
+    local max_lines=100000  # Keep last 100k lines for example
+    if [[ -f "$LOG_FILE" ]] && [[ $(wc -l < "$LOG_FILE") -gt $max_lines ]]; then
+        tail -n $max_lines "$LOG_FILE" > "${LOG_FILE}.tmp" && mv "${LOG_FILE}.tmp" "$LOG_FILE"
+        log_message "Log file truncated to last $max_lines lines"
+    fi
 }
 
 # Add basic env var validation
@@ -128,6 +137,7 @@ report_status() {
         local base_name=$(basename "$input_file" .in)
         local output_file="${SHARED_DIR}/${base_name}.out"
         local molden_file="${SHARED_DIR}/${base_name}.molden"
+        local run_log="${SHARED_DIR}/${base_name}_run.log"
         local file_key="${base_name}.out"
         
         # Initialize offset tracking if it doesn't exist for this file
@@ -179,10 +189,13 @@ report_status() {
     "filename": "$base_name",
     "status": "$status",
     "new_content": "$new_lines",
-    "offset": $last_offset
+    "offset": $last_offset,
+    "run_log": "$(base64 < "$run_log")"
 }
 EOF
-        )
+        ) || {
+            log_message "Network error occurred"
+        }
 
         # Handle successful report
         if [[ "$response_code" == "204" ]]; then
@@ -197,22 +210,36 @@ EOF
                 # App is not running, perform cleanup operations
                 # Try to move the molden file to the GCP bucket if it exists, otherwise just move the input and output files
                 if [[ -f "$molden_file" ]]; then
-                    if bucket_upload_and_cleanup "$molden_file" "${GCP_BUCKET}/${GCP_BUCKET_PREFIX}/"; then
-                        log_message "Upload operation completed successfully"
+                    if bucket_upload "$molden_file" "${GCP_BUCKET}/${GCP_BUCKET_PREFIX}/"; then
+                        log_message "Upload operation for MOLDEN file completed successfully"
+                        mv "$molden_file" "$processed_dir/"
                     else
-                        log_message "Upload operation failed, check previous error messages for details"
+                        log_message "Upload operation for MOLDEN file failed, check previous error messages for details"
                     fi
                 fi
                 # Don't proceed with the cleanup if molden file is not successfully moved
                 if [[ -f "$molden_file" ]]; then
                     log_message "Failed to move $molden_file to GCP bucket, will try again later"
                     continue
+                else
+                    # move the log file if it's not zero size
+                    if [[ -s "$run_log" ]]; then
+                        if bucket_upload "$run_log" "${GCP_BUCKET}/${GCP_BUCKET_PREFIX}/"; then
+                            log_message "Upload operation for LOG file completed successfully"
+                            [[ -f "$run_log" ]] && mv "$run_log" "$processed_dir/"
+                        else
+                            log_message "Upload operation for LOG file failed, check previous error messages for details"
+                        fi
+                    else
+                        log_message "Run log file is empty, skipping upload"
+                        [[ -f "$run_log" ]] && rm "$run_log"
+                    fi
                 fi
 
                 # Move files to processed directory and cleanup
                 mv "$input_file" "$processed_dir/"
                 [[ -f "$output_file" ]] && mv "$output_file" "$processed_dir/"
-                [[ -f "$molden_file" ]] && mv "$molden_file" "$processed_dir/"
+                
                 sed -i.bak "/^${file_key}:/d" "${OFFSET_FILE}"
                 rm -f "${OFFSET_FILE}.bak"
             fi
@@ -228,7 +255,10 @@ EOF
 fetch_new_job() {
     
     # Request a new job from the API and capture response code and body
-    response=$(curl -s -w "\n%{http_code}" -X GET "$JOB_ASSIGNMENT_ENDPOINT")
+    response=$(curl -s -w "\n%{http_code}" -X GET "$JOB_ASSIGNMENT_ENDPOINT")  || {
+        log_message "Network error occurred"
+    }
+
     http_code=$(echo "$response" | tail -n1)
     response=$(echo "$response" | head -n -1)
 
@@ -248,10 +278,15 @@ fetch_new_job() {
         # Initialize offset tracking for the new job
         initialize_offset_tracking "${file_name%.*}.out"
         
+        # Keep the run log next to the input file
+        run_log="${input_file%.*}_run.log"
+        touch "$run_log"
+
         log_message "Starting job execution"
 
-        # Start the job in the background
-        mpirun --allow-run-as-root -np 1 "$APP_EXECUTABLE" "$input_file" >> "$LOG_FILE" 2>&1 &
+        # Start the job in the background and redirect tee's output to prevent console clutter
+        mpirun --allow-run-as-root -np 1 "$APP_EXECUTABLE" "$input_file" 2>&1 | tee -a "$LOG_FILE" "$run_log" >/dev/null &
+
         pid=$!
 
         disown $pid
@@ -268,13 +303,12 @@ fetch_new_job() {
     fi
 }
 
-bucket_upload_and_cleanup() {
+bucket_upload() {
     local source_file="$1"
     local destination="$2"
     local exit_code=0
     local upload_output=""
-    local remove_output=""
-    
+
     # Capture upload output in both success and failure cases
     upload_output=$(gcloud storage cp "$source_file" "$destination" 2>&1)
     if [ $? -ne 0 ]; then
@@ -286,18 +320,7 @@ bucket_upload_and_cleanup() {
     
     log_message "Successfully uploaded $source_file to $destination"
     [ -n "$upload_output" ] && log_message "Upload details: $upload_output"
-    
-    # Only attempt removal if upload succeeded
-    remove_output=$(rm -f "$source_file" 2>&1)
-    if [ $? -ne 0 ]; then
-        exit_code=1
-        log_message "WARNING: Upload succeeded but failed to remove source file $source_file"
-        log_message "Removal error details: $remove_output"
-        return $exit_code
-    fi
-    
-    log_message "Successfully removed source file $source_file"
-    [ -n "$remove_output" ] && log_message "Removal details: $remove_output"
+
     return $exit_code
 }
 
@@ -317,6 +340,8 @@ main_loop() {
         
         # Report status for all edge cases
         report_status
+
+        truncate_old_logs
 
         # Sleep before the next cycle
         sleep "$STATUS_CHECK_INTERVAL"
