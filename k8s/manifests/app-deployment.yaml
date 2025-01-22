@@ -33,7 +33,7 @@ spec:
       terminationGracePeriodSeconds: 300
       containers:
       - name: quick-app
-        image: crtag/quick-app-managed:latest
+        image: crtag/quick-app-managed:1.1.8
         imagePullPolicy: Always
         livenessProbe:
           exec:
