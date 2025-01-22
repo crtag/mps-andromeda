@@ -1,5 +1,5 @@
 # Start from the base QUICK application image
-FROM crtag/quick-app:latest
+FROM crtag/quick-app:1.0.2
 
 RUN apt-get update -y \
 && apt-get install -y \
