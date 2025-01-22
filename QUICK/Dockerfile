@@ -25,7 +25,8 @@ WORKDIR /src
 RUN rm -rf /src/*
 
 # Clone the QUICK repository from GitHub
-RUN git clone https://github.com/merzlab/QUICK.git .
+RUN git clone https://github.com/atomCAD/QUICK.git .
+RUN git checkout QUICK_Constrained_Optimization
 
 # Set working directory to build
 WORKDIR /src/build
