@@ -106,3 +106,5 @@ microk8s kubectl exec -n tenant-ac-machine -it disk-access-0 -- /bin/bash
 ## Running the application
 
 `mpirun --allow-run-as-root -np 1 quick.cuda.MPI /mnt/shared-disk/water.in`
+
+## Updating the application
