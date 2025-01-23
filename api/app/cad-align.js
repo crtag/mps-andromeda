@@ -549,28 +549,50 @@ function calculateAlignmentRotation(point1, point2, targetAxis = 'x') {
     return rotMatrix;
 }
 
-
 function applyRotationToModel(viewer, rotationMatrix) {
     const model = viewer.getModel();
-    
-    // Get the elements of the rotation matrix
     const elements = rotationMatrix.elements;
+    const originalPositions = [];
+    const newPositions = [];
 
-    // Iterate through each atom in the model
+    // Store original positions and calculate new positions
     model.selectedAtoms({}).forEach(atom => {
-        // Get the atom's current position
         const { x, y, z } = atom;
+        originalPositions.push({ x, y, z });
 
-        // Apply the rotation matrix to the atom's position
         const newX = elements[0] * x + elements[4] * y + elements[8] * z + elements[12];
         const newY = elements[1] * x + elements[5] * y + elements[9] * z + elements[13];
         const newZ = elements[2] * x + elements[6] * y + elements[10] * z + elements[14];
-
-        // Update the atom's position
-        atom.x = newX;
-        atom.y = newY;
-        atom.z = newZ;
+        newPositions.push({ x: newX, y: newY, z: newZ });
     });
+
+    // Calculate RMSD
+    const rmsd = calculateRMSD(originalPositions, newPositions);
+    console.log(`RMSD: ${rmsd} Å`);
+
+    newPositions.forEach((pos, i) => {
+        const atom = model.selectedAtoms({})[i];
+        atom.x = pos.x;
+        atom.y = pos.y;
+        atom.z = pos.z;
+    });
+
+}
+
+function calculateRMSD(positions1, positions2) {
+    if (positions1.length !== positions2.length) {
+        throw new Error('Position arrays must have equal length');
+    }
+
+    const sumSquaredDiff = positions1.reduce((sum, pos1, i) => {
+        const pos2 = positions2[i];
+        const dx = pos1.x - pos2.x;
+        const dy = pos1.y - pos2.y;
+        const dz = pos1.z - pos2.z;
+        return sum + dx*dx + dy*dy + dz*dz;
+    }, 0);
+
+    return Math.sqrt(sumSquaredDiff / positions1.length);
 }
 
 function alignToMillerPlane(viewer, atom1, atom2, atom3, millerNotation) {
