@@ -573,6 +573,150 @@ function applyRotationToModel(viewer, rotationMatrix) {
     });
 }
 
+function alignToMillerPlane(viewer, atom1, atom2, atom3, millerNotation) {
+    // Parse Miller notation string and convert to normal vector
+    const indices = parseMillerNotation(millerNotation);
+    const normal = millerIndicesToNormal(indices);
+    
+    // Calculate the current plane normal from three atoms
+    const planeNormal = calculatePlaneNormal(atom1, atom2, atom3);
+    
+    // Calculate rotation matrix to align plane normals
+    const rotationMatrix = calculateNormalAlignment(planeNormal, normal);
+    
+    // Apply the rotation
+    applyRotationToModel(viewer, rotationMatrix);
+}
+
+function parseMillerNotation(notation) {
+    // Remove parentheses and handle multi-digit indices
+    const cleaned = notation.replace(/[()]/g, '');
+    // Match positive or negative integers
+    const matches = cleaned.match(/-?\d+/g);
+    if (!matches || matches.length !== 3) {
+        throw new Error('Invalid Miller notation: Must contain exactly three indices');
+    }
+    return matches.map(Number);
+}
+
+function millerIndicesToNormal([h, k, l]) {
+    // For a cubic system, the normal vector is directly proportional to the Miller indices
+    // but we need to consider the reciprocal lattice
+    // The direction cosines are proportional to the Miller indices
+    const d = Math.sqrt(h*h + k*k + l*l);
+    
+    // For (211): [2/√6, 1/√6, 1/√6]
+    return new $3Dmol.Vector3(
+        h / d,
+        k / d,
+        l / d
+    );
+}
+
+// For non-cubic systems, we need the reciprocal lattice parameters
+function millerIndicesToNormalGeneral([h, k, l], crystalSystem = 'cubic', latticeParams = {a: 1, b: 1, c: 1, alpha: 90, beta: 90, gamma: 90}) {
+    if (crystalSystem.toLowerCase() === 'cubic') {
+        return millerIndicesToNormal([h, k, l]);
+    }
+    
+    // Convert angles to radians
+    const toRad = angle => angle * Math.PI / 180;
+    const alpha = toRad(latticeParams.alpha);
+    const beta = toRad(latticeParams.beta);
+    const gamma = toRad(latticeParams.gamma);
+    
+    // Calculate reciprocal lattice parameters
+    const volume = Math.sqrt(
+        1 - Math.cos(alpha)**2 - Math.cos(beta)**2 - Math.cos(gamma)**2 
+        + 2 * Math.cos(alpha) * Math.cos(beta) * Math.cos(gamma)
+    );
+    
+    // Calculate metric tensor components for the reciprocal lattice
+    // This gives the correct normal vector for any crystal system
+    const a = latticeParams.a;
+    const b = latticeParams.b;
+    const c = latticeParams.c;
+    
+    const astar = b * c * Math.sin(alpha) / volume;
+    const bstar = a * c * Math.sin(beta) / volume;
+    const cstar = a * b * Math.sin(gamma) / volume;
+    
+    const x = h * astar;
+    const y = k * bstar;
+    const z = l * cstar;
+    
+    const d = Math.sqrt(x*x + y*y + z*z);
+    
+    return new $3Dmol.Vector3(x/d, y/d, z/d);
+}
+
+function calculatePlaneNormal(p1, p2, p3) {
+    // Convert atoms to vectors
+    const v1 = new $3Dmol.Vector3(p1.x, p1.y, p1.z);
+    const v2 = new $3Dmol.Vector3(p2.x, p2.y, p2.z);
+    const v3 = new $3Dmol.Vector3(p3.x, p3.y, p3.z);
+    
+    // Calculate vectors in the plane
+    const vec1 = new $3Dmol.Vector3().subVectors(v2, v1);
+    const vec2 = new $3Dmol.Vector3().subVectors(v3, v1);
+    
+    // Calculate normal using cross product
+    return new $3Dmol.Vector3()
+        .crossVectors(vec1, vec2)
+        .normalize();
+}
+
+function calculateNormalAlignment(currentNormal, targetNormal) {
+    // Calculate rotation axis and angle
+    const rotAxis = new $3Dmol.Vector3()
+        .crossVectors(currentNormal, targetNormal)
+        .normalize();
+        
+    // If normals are parallel (either same or opposite direction)
+    if (rotAxis.length() < 1e-10) {
+        const dot = currentNormal.dot(targetNormal);
+        if (dot > 0) {
+            // Same direction - no rotation needed
+            return new $3Dmol.Matrix4().identity();
+        } else {
+            // Opposite direction - rotate 180° around any perpendicular axis
+            const perpAxis = findPerpendicularVector(currentNormal);
+            return createRotationMatrix(perpAxis, Math.PI);
+        }
+    }
+    
+    const angle = Math.acos(
+        Math.min(Math.max(currentNormal.dot(targetNormal), -1), 1)
+    );
+    
+    return createRotationMatrix(rotAxis, angle);
+}
+
+function findPerpendicularVector(v) {
+    // Find any vector perpendicular to v
+    const temp = Math.abs(v.x) < 0.5 ? 
+        new $3Dmol.Vector3(1, 0, 0) : 
+        new $3Dmol.Vector3(0, 1, 0);
+        
+    return new $3Dmol.Vector3()
+        .crossVectors(v, temp)
+        .normalize();
+}
+
+function createRotationMatrix(axis, angle) {
+    const { x, y, z } = axis;
+    const c = Math.cos(angle);
+    const s = Math.sin(angle);
+    const t = 1 - c;
+    
+    return new $3Dmol.Matrix4().set(
+        t*x*x + c,    t*x*y - z*s,  t*x*z + y*s,  0,
+        t*x*y + z*s,  t*y*y + c,    t*y*z - x*s,  0,
+        t*x*z - y*s,  t*y*z + x*s,  t*z*z + c,    0,
+        0,            0,            0,            1
+    );
+}
+
 function translateModelTo(viewer, atom, target) {
     const model = viewer.getModel();
 
