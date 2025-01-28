@@ -48,7 +48,8 @@
 #translation-control {
     display: flex;
     align-items: baseline;
-    justify-content: space-between;
+    /* add gap betwen items */
+    gap: 4px;
 }
 
 #translation-control input {
@@ -156,4 +157,23 @@ label {
 label.cad-ctrl-grid span {
     font-size: smaller;
     font-weight: normal;
+}
+
+#miller-plane-selector {
+    
+}
+
+.plane-selector label>span {
+    font-size: smaller;
+    font-weight: normal;
+}
+
+#miller-plane-selector .plane-selector {
+    margin-top: 10px;
+}
+
+#workflow-controls {
+    display: flex;
+    justify-content: flex-end;
+    gap: 4px;
 }

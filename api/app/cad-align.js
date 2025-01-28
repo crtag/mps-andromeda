@@ -294,12 +294,13 @@ function drawLine(viewer, atom1, atom2) {
     return arrow;
 }
 
-function alignModelToVec(viewer, atom1, atom2) {
+function alignModelToVec(viewer, atom1, atom2, alignmentAxis) {
     console.log(atom1, atom2, alignmentAxis);
+
     const rotationMatrix = calculateAlignmentRotation(
         atom1,  // first point
         atom2,  // second point
-        alignmentAxis  // target axis ('x', 'y', or 'z')
+        alignmentAxis  // target axis ('(100)', '(010)', or '(001)')
     );
 
     console.dir(rotationMatrix);
@@ -337,17 +338,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initGizmo({viewer, gizmoViewer});
     renderSelectedAtomDetails(viewer);
 
-    document.querySelectorAll('#axis-selector input[name="axis"]')
-    .forEach(el => {
-        el.addEventListener('change', (e) => {
-            alignmentAxis = e.target.value;
-            console.log(`Selected axis: ${alignmentAxis}`);
-        })
-    });
-    // get currently selected axis upon DOM load
-    alignmentAxis = document.querySelector('#axis-selector input[name="axis"]:checked').value;
-    console.log(`Default selected axis: ${alignmentAxis}`);
-
     document.getElementById('download-button').addEventListener('click', () => {
         // alert user if there's no model available and abort
         if (viewer.models.length === 0) {
@@ -358,24 +348,27 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadModelXYZ(viewer);
     });
 
-    document.getElementById('align-button').addEventListener('click', () => {
-        if (doubleSelectionSet.size === 2) {
-            const model = viewer.getModel();
-            const atoms = model.selectedAtoms({index: Array.from(doubleSelectionSet)});
-            console.log(atoms);
-            
-            alignModelToVec(viewer, atoms[0], atoms[1]);
-            viewer.removeShape(alignmentLineVec);
-            viewer.setStyle({}, defaultViewerStyle);
-            viewer.zoomTo({model}, 250);
-            viewer.render();
+    document.querySelectorAll('#axis-selector .btn-cad-action').forEach(button => {
+        button.addEventListener('click', event => {
+            if (doubleSelectionSet.size === 2) {
+                const model = viewer.getModel();
+                const atoms = model.selectedAtoms({index: Array.from(doubleSelectionSet)});
+                console.log(atoms);
+                
+                alignModelToVec(viewer, atoms[0], atoms[1], event.target.getAttribute('data-miller'));
 
-            alignmentLineVec = drawLine(viewer, atoms[0], atoms[1]);
-            viewer.setStyle({index: [atoms[0].index, atoms[1].index]}, {...defaultViewerStyle, ...selectedAtomStyle});
-            viewer.render();
-
-            renderSelectedAtomDetails(viewer);
-        } 
+                viewer.removeShape(alignmentLineVec);
+                viewer.setStyle({}, defaultViewerStyle);
+                viewer.zoomTo({model}, 250);
+                viewer.render();
+    
+                alignmentLineVec = drawLine(viewer, atoms[0], atoms[1]);
+                viewer.setStyle({index: [atoms[0].index, atoms[1].index]}, {...defaultViewerStyle, ...selectedAtomStyle});
+                viewer.render();
+    
+                renderSelectedAtomDetails(viewer);
+            } 
+        });
     });
 
     document.getElementById('translate-button').addEventListener('click', () => {
@@ -431,6 +424,19 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // Attach event listener to miller-plane-selector buttons
+    document.querySelectorAll('#miller-plane-selector .btn-cad-action').forEach(button => {
+        button.addEventListener('click', event => {
+            console.log('Aligning to Miller plane', event.target.getAttribute('data-miller'));
+
+            // const millerNotation = event.target.getAttribute('data-miller');
+            // alignToMillerPlane(viewer, ...viewer.getModel().selectedAtoms({}), millerNotation);
+
+            // viewer.zoomTo({model: viewer.getModel()}, 250);
+            // viewer.render();
+        });
+    });
+
 });
 
 // function to render selected atoms details, dealing with global doubleSelectionSet
@@ -474,27 +480,15 @@ function debugVectorAngles(point1, point2) {
     );
 }
 
-function calculateAlignmentRotation(point1, point2, targetAxis = 'x') {
+function calculateAlignmentRotation(point1, point2, targetAxis = '(100)') {
     // Create and normalize the direction vector
     const vec1 = new $3Dmol.Vector3(point1.x, point1.y, point1.z);
     const vec2 = new $3Dmol.Vector3(point2.x, point2.y, point2.z);
     const direction = new $3Dmol.Vector3().subVectors(vec2, vec1).normalize();
 
-    // Define the target axis vector
-    let targetVec;
-    switch (targetAxis.toLowerCase()) {
-        case 'x':
-            targetVec = new $3Dmol.Vector3(1, 0, 0);
-            break;
-        case 'y':
-            targetVec = new $3Dmol.Vector3(0, 1, 0);
-            break;
-        case 'z':
-            targetVec = new $3Dmol.Vector3(0, 0, 1);
-            break;
-        default:
-            throw new Error('Invalid target axis. Use "x", "y", or "z".');
-    }
+    // Parse Miller indices and create target vector
+    const [h, k, l] = parseMillerNotation(targetAxis);
+    const targetVec = new $3Dmol.Vector3(h, k, l).normalize();
 
     // Calculate the rotation axis and angle
     const rotAxis = new $3Dmol.Vector3().crossVectors(direction, targetVec);
@@ -606,19 +600,29 @@ function alignToMillerPlane(viewer, atom1, atom2, atom3, millerNotation) {
     // Calculate rotation matrix to align plane normals
     const rotationMatrix = calculateNormalAlignment(planeNormal, normal);
     
+    // Get the current view
+    const currentView = viewer.getView();
+
     // Apply the rotation
     applyRotationToModel(viewer, rotationMatrix);
+
+    // Update the view
+    viewer.setView(currentView);
 }
 
-function parseMillerNotation(notation) {
-    // Remove parentheses and handle multi-digit indices
-    const cleaned = notation.replace(/[()]/g, '');
-    // Match positive or negative integers
-    const matches = cleaned.match(/-?\d+/g);
-    if (!matches || matches.length !== 3) {
-        throw new Error('Invalid Miller notation: Must contain exactly three indices');
+function parseMillerNotation(...notation) {
+    if (typeof notation[0] === 'string') {
+        const matches = notation[0].match(/-?\d/g);
+        if (!matches || matches.length !== 3) {
+            throw new Error('Invalid Miller index format. Expected three components like "(100)" or "[0-10]".');
+        }
+        return matches.map(Number);
+    } else {
+        if (notation.length !== 3) {
+            throw new Error('Provide three numbers (e.g., 1, 0, -1) or a single string (e.g., "[0-10]").');
+        }
+        return notation.map(arg => parseInt(arg, 10));
     }
-    return matches.map(Number);
 }
 
 function millerIndicesToNormal([h, k, l]) {
