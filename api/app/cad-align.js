@@ -2,8 +2,9 @@ let cadFrameEl = document.getElementById('cad-frame');
 let gizmoFrameEl = document.getElementById('gizmo-frame');
 let defaultViewerStyle = {stick:{}, sphere:{radius: 0.5}, clicksphere:{radius: 0.5}};
 let selectedAtomStyle = {sphere: {color: '#FF69B4', radius: 0.75 }};
-const doubleSelectionSet = new Set();
+const atomsSelectionSet = new Set();
 let alignmentLineVec = null;
+let alignmentPlaneVec = null;
 let alignmentAxis = null;
 let modelXYZfileName = null;
 let xyzPlanes = null;
@@ -218,7 +219,7 @@ function renderXYZdata(viewer, data) {
     if (viewer.models.length > 0) {
         viewer.clear();
         xyzPlanes = null;
-        doubleSelectionSet.clear();
+        atomsSelectionSet.clear();
         xyzPlanes = addPlanes(viewer);
 
         // reset plane grids checkboxes
@@ -242,26 +243,37 @@ function handleAtomSelection(viewer) {
     viewer.setClickable({}, true, (atom) => {
         console.log(`Clicked atom`, atom);
 
-        if (doubleSelectionSet.has(atom.index)) {
-            doubleSelectionSet.delete(atom.index);
+        if (atomsSelectionSet.has(atom.index)) {
+            atomsSelectionSet.delete(atom.index);
             viewer.setStyle({index: atom.index}, defaultViewerStyle);
-        } else if (doubleSelectionSet.size < 2) {
-            doubleSelectionSet.add(atom.index);
+        } else if (atomsSelectionSet.size < 3) {
+            atomsSelectionSet.add(atom.index);
             viewer.setStyle({index: atom.index}, {...defaultViewerStyle, ...selectedAtomStyle});
         } 
 
-        if (doubleSelectionSet.size === 2 && !alignmentLineVec) {
-            let atomsIter = doubleSelectionSet.keys();
-            alignmentLineVec = drawLine(viewer, viewer.models[0].atoms[atomsIter.next().value], viewer.models[0].atoms[atomsIter.next().value]);
-        } 
-        if (doubleSelectionSet.size < 2 && alignmentLineVec) {
+        if (atomsSelectionSet.size === 2 && !alignmentLineVec) {
+            let atomsIter = atomsSelectionSet.keys();
+            alignmentLineVec = drawArrow(viewer, viewer.models[0].atoms[atomsIter.next().value], viewer.models[0].atoms[atomsIter.next().value]);
+        }
+
+        if (atomsSelectionSet.size !== 2 && alignmentLineVec) {
             viewer.removeShape(alignmentLineVec);
             alignmentLineVec = null;
         }
 
-        console.log(`Selection size: ${doubleSelectionSet.size}`);
+        if (atomsSelectionSet.size === 3 && !alignmentPlaneVec) {
+            let atomsIter = atomsSelectionSet.keys();
+            alignmentPlaneVec = drawTriangle(viewer, viewer.models[0].atoms[atomsIter.next().value], viewer.models[0].atoms[atomsIter.next().value], viewer.models[0].atoms[atomsIter.next().value]);
+        }
 
-        if (doubleSelectionSet.size === 1) {
+        if (atomsSelectionSet.size !== 3 && alignmentPlaneVec) {
+            viewer.removeShape(alignmentPlaneVec);
+            alignmentPlaneVec = null;
+        }
+
+        console.log(`Selection size: ${atomsSelectionSet.size}`);
+
+        if (atomsSelectionSet.size === 1) {
             // enable the translation button .btn-cad-action#translate-button by removing "disabled" class
             document.querySelector('.btn-cad-action#translate-button').classList.remove('disabled');
         } else {
@@ -274,7 +286,7 @@ function handleAtomSelection(viewer) {
     });
 }
 
-function drawLine(viewer, atom1, atom2) {
+function drawArrow(viewer, atom1, atom2) {
     
     debugVectorAngles(atom1, atom2);
 
@@ -292,6 +304,57 @@ function drawLine(viewer, atom1, atom2) {
  
     viewer.render();
     return arrow;
+}
+
+function drawTriangle(viewer, atom1, atom2, atom3) {
+    // Extract atom positions
+    var vertices = [];
+    var normals = [];
+    var colors = [];
+    
+    // Use actual atom positions as vertices
+    vertices.push(new $3Dmol.Vector3(atom1.x, atom1.y, atom1.z));
+    vertices.push(new $3Dmol.Vector3(atom2.x, atom2.y, atom2.z));
+    vertices.push(new $3Dmol.Vector3(atom3.x, atom3.y, atom3.z));
+    
+    // Calculate normals (assuming a flat triangle, calculate a single normal)
+    var v1 = new $3Dmol.Vector3(
+        atom2.x - atom1.x,
+        atom2.y - atom1.y,
+        atom2.z - atom1.z
+    );
+    var v2 = new $3Dmol.Vector3(
+        atom3.x - atom1.x,
+        atom3.y - atom1.y,
+        atom3.z - atom1.z
+    );
+    var normal = v1.clone().cross(v2).normalize();
+    
+    // Add normals for each vertex (same normal for all vertices in the flat triangle)
+    normals.push(normal);
+    normals.push(normal);
+    normals.push(normal);
+    
+    // Set triangle vertex colors (customize as needed)
+    colors.push({ r: 1, g: 0, b: 0 }); // Red for vertex 1
+    colors.push({ r: 0, g: 1, b: 0 }); // Green for vertex 2
+    colors.push({ r: 0, g: 0, b: 1 }); // Blue for vertex 3
+
+    // Define the triangle face using vertex indices
+    var faces = [0, 1, 2];
+    
+    // Create the custom specification for the triangle
+    var spec = {
+        vertexArr: vertices,
+        normalArr: normals,
+        faceArr: faces,
+        color: colors,
+    };
+    
+    // Add the custom object to the viewer
+    const triangle = viewer.addCustom(spec);
+    viewer.render();
+    return triangle;
 }
 
 function alignModelToVec(viewer, atom1, atom2, alignmentAxis) {
@@ -350,9 +413,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.querySelectorAll('#axis-selector .btn-cad-action').forEach(button => {
         button.addEventListener('click', event => {
-            if (doubleSelectionSet.size === 2) {
+            if (atomsSelectionSet.size === 2) {
                 const model = viewer.getModel();
-                const atoms = model.selectedAtoms({index: Array.from(doubleSelectionSet)});
+                const atoms = model.selectedAtoms({index: Array.from(atomsSelectionSet)});
                 console.log(atoms);
                 
                 alignModelToVec(viewer, atoms[0], atoms[1], event.target.getAttribute('data-miller'));
@@ -362,7 +425,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 viewer.zoomTo({model}, 250);
                 viewer.render();
     
-                alignmentLineVec = drawLine(viewer, atoms[0], atoms[1]);
+                alignmentLineVec = drawArrow(viewer, atoms[0], atoms[1]);
                 viewer.setStyle({index: [atoms[0].index, atoms[1].index]}, {...defaultViewerStyle, ...selectedAtomStyle});
                 viewer.render();
     
@@ -372,7 +435,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('translate-button').addEventListener('click', () => {
-        if (doubleSelectionSet.size === 1) {
+        if (atomsSelectionSet.size === 1) {
             console.log('Translating model');
 
             let x = document.getElementById('x-translation').value;
@@ -385,7 +448,7 @@ document.addEventListener('DOMContentLoaded', () => {
             z = isNaN(z) ? 0 : parseFloat(z);
 
             const model = viewer.getModel();
-            const atom = model.selectedAtoms({index: Array.from(doubleSelectionSet)[0]})[0];
+            const atom = model.selectedAtoms({index: Array.from(atomsSelectionSet)[0]})[0];
             console.log(`Selected atom for translation:`, atom);
             console.log(`Translation to: {x: ${x}, y: ${y}, z: ${z}}`);
             
@@ -443,9 +506,9 @@ document.addEventListener('DOMContentLoaded', () => {
 // should update two divs in html ID'd with atom1-info and atom2-info
 // display basic atom details like element, x, y, z
 function renderSelectedAtomDetails(viewer) {
-    let atomsIter = doubleSelectionSet.keys();
-    let atom1 = doubleSelectionSet.size > 0 ? viewer.models[0].atoms[atomsIter.next().value] : { elem: 'N/A', x: 'N/A', y: 'N/A', z: 'N/A' };
-    let atom2 = doubleSelectionSet.size > 1 ? viewer.models[0].atoms[atomsIter.next().value] : { elem: 'N/A', x: 'N/A', y: 'N/A', z: 'N/A' };
+    let atomsIter = atomsSelectionSet.keys();
+    let atom1 = atomsSelectionSet.size > 0 ? viewer.models[0].atoms[atomsIter.next().value] : { elem: 'N/A', x: 'N/A', y: 'N/A', z: 'N/A' };
+    let atom2 = atomsSelectionSet.size > 1 ? viewer.models[0].atoms[atomsIter.next().value] : { elem: 'N/A', x: 'N/A', y: 'N/A', z: 'N/A' };
     document.getElementById('atom1-info').innerText = `Atom 1: ${atom1.elem} (${atom1.x}, ${atom1.y}, ${atom1.z})`;
     document.getElementById('atom2-info').innerText = `Atom 2: ${atom2.elem} (${atom2.x}, ${atom2.y}, ${atom2.z})`;
 }
