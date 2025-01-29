@@ -460,13 +460,27 @@ document.addEventListener('DOMContentLoaded', () => {
     // Attach event listener to miller-plane-selector buttons
     document.querySelectorAll('#miller-plane-selector .btn-cad-action').forEach(button => {
         button.addEventListener('click', event => {
-            console.log('Aligning to Miller plane', event.target.getAttribute('data-miller'));
+            if (atomsSelectionSet.size === 3) {
+                const millerPlane = event.target.getAttribute('data-miller');
+                console.log('Aligning to Miller plane', millerPlane);
 
-            // const millerNotation = event.target.getAttribute('data-miller');
-            // alignToMillerPlane(viewer, ...viewer.getModel().selectedAtoms({}), millerNotation);
+                const model = viewer.getModel();
+                const atoms = model.selectedAtoms({index: Array.from(atomsSelectionSet)});
+                console.log(atoms);
 
-            // viewer.zoomTo({model: viewer.getModel()}, 250);
-            // viewer.render();
+                alignToMillerPlane(viewer, ...atoms, millerPlane);
+
+                viewer.removeShape(alignmentPlaneVec);
+                viewer.setStyle({}, defaultViewerStyle);
+                viewer.zoomTo({model}, 250);
+                viewer.render();
+
+                alignmentPlaneVec = drawTriangle(viewer, ...atoms);
+                viewer.setStyle({index: Array.from(atomsSelectionSet)}, {...defaultViewerStyle, ...selectedAtomStyle});
+                viewer.render();
+
+                renderSelectedAtomDetails(viewer);
+            }
         });
     });
 
@@ -479,8 +493,10 @@ function renderSelectedAtomDetails(viewer) {
     let atomsIter = atomsSelectionSet.keys();
     let atom1 = atomsSelectionSet.size > 0 ? viewer.models[0].atoms[atomsIter.next().value] : { elem: 'N/A', x: 'N/A', y: 'N/A', z: 'N/A' };
     let atom2 = atomsSelectionSet.size > 1 ? viewer.models[0].atoms[atomsIter.next().value] : { elem: 'N/A', x: 'N/A', y: 'N/A', z: 'N/A' };
+    let atom3 = atomsSelectionSet.size > 2 ? viewer.models[0].atoms[atomsIter.next().value] : { elem: 'N/A', x: 'N/A', y: 'N/A', z: 'N/A' };
     document.getElementById('atom1-info').innerText = `Atom 1: ${atom1.elem} (${atom1.x}, ${atom1.y}, ${atom1.z})`;
     document.getElementById('atom2-info').innerText = `Atom 2: ${atom2.elem} (${atom2.x}, ${atom2.y}, ${atom2.z})`;
+    document.getElementById('atom3-info').innerText = `Atom 3: ${atom3.elem} (${atom3.x}, ${atom3.y}, ${atom3.z})`;
 }
 
 function debugVectorAngles(point1, point2) {
