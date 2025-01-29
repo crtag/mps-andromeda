@@ -239,6 +239,22 @@ function renderXYZdata(viewer, data) {
     viewer.render();
 }
 
+function clearAtomsSelection(viewer) {
+    atomsSelectionSet.clear();
+    // remove any alignment lines or planes
+    if (alignmentLineVec) {
+        viewer.removeShape(alignmentLineVec);
+        alignmentLineVec = null;
+    }
+    if (alignmentPlaneVec) {
+        viewer.removeShape(alignmentPlaneVec);
+        alignmentPlaneVec = null;
+    }
+
+    viewer.setStyle({}, defaultViewerStyle);
+    viewer.render();
+}
+
 function handleAtomSelection(viewer) {
     viewer.setClickable({}, true, (atom) => {
         console.log(`Clicked atom`, atom);
@@ -482,6 +498,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderSelectedAtomDetails(viewer);
             }
         });
+    });
+
+    // Attach event listener to clear selection button
+    document.getElementById('clear-selection-button').addEventListener('click', () => {
+        clearAtomsSelection(viewer);
     });
 
 });

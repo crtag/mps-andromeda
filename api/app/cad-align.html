@@ -82,7 +82,6 @@
             <div class="alignment-controls">
 
                 <div id="translation-control">
-                    <label for="axis">Translate to:</label>
                     <label for="x-translation">X</label>
                     <input type="number" id="x-translation" value="0">
                     <label for="y-translation">Y</label>
@@ -93,16 +92,8 @@
                     <button class="btn-cad-action disabled" id="translate-button">Translate</button>
                 </div>
 
-                <!-- div id="translation-control">
-                    <label for="axis">Reflect to:</label>
-                    <button class="btn-cad-action miller-selector" data-miller="[100]" title="YZ plane">[100]</button>
-                    <button class="btn-cad-action miller-selector" data-miller="[010]" title="XZ plane">[010]</button>
-                    <button class="btn-cad-action miller-selector" data-miller="[001]" title="XY plane">[001]</button>
-                </div -->
-
                 <div id="miller-plane-selector">
                     <div class="plane-selector">
-                        <label>Align to <span>(primary)</span>:</label>
                         <!-- Primary planes -->
                         <button class="btn-cad-action miller-selector" data-miller="[100]" title="YZ plane">[100]</button>
                         <button class="btn-cad-action miller-selector" data-miller="[-100]" title="-YZ plane">[-100]</button>
@@ -113,7 +104,6 @@
                     </div>
                     
                     <div class="plane-selector">
-                        <label>Align to <span>(secondary)</span>:</label>
                         <!-- Rest of diagonal and higher index planes remain the same -->
                         <button class="btn-cad-action miller-selector" data-miller="[110]">[110]</button>
                         <button class="btn-cad-action miller-selector" data-miller="[101]">[101]</button>
@@ -130,7 +120,6 @@
 
                 <div id="axis-selector">
                     <div>
-                        <label for="axis">Align to:</label>
                         <button class="btn-cad-action miller-selector" data-miller="(100)">(100)</button>
                         <button class="btn-cad-action miller-selector" data-miller="(010)">(010)</button>
                         <button class="btn-cad-action miller-selector" data-miller="(001)">(001)</button>
@@ -138,6 +127,7 @@
                 </div>
 
                 <div id="workflow-controls">
+                    <button class="btn-cad-action" id="clear-selection-button">Clear Selection</button>
                     <button class="btn-cad-action" id="download-button">Download XYZ</button>
                 </div>
             </div>
