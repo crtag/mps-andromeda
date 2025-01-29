@@ -307,54 +307,24 @@ function drawArrow(viewer, atom1, atom2) {
 }
 
 function drawTriangle(viewer, atom1, atom2, atom3) {
-    // Extract atom positions
-    var vertices = [];
-    var normals = [];
-    var colors = [];
-    
-    // Use actual atom positions as vertices
-    vertices.push(new $3Dmol.Vector3(atom1.x, atom1.y, atom1.z));
-    vertices.push(new $3Dmol.Vector3(atom2.x, atom2.y, atom2.z));
-    vertices.push(new $3Dmol.Vector3(atom3.x, atom3.y, atom3.z));
-    
-    // Calculate normals (assuming a flat triangle, calculate a single normal)
-    var v1 = new $3Dmol.Vector3(
-        atom2.x - atom1.x,
-        atom2.y - atom1.y,
-        atom2.z - atom1.z
-    );
-    var v2 = new $3Dmol.Vector3(
-        atom3.x - atom1.x,
-        atom3.y - atom1.y,
-        atom3.z - atom1.z
-    );
-    var normal = v1.clone().cross(v2).normalize();
-    
-    // Add normals for each vertex (same normal for all vertices in the flat triangle)
-    normals.push(normal);
-    normals.push(normal);
-    normals.push(normal);
-    
-    // Set triangle vertex colors (customize as needed)
-    colors.push({ r: 1, g: 0, b: 0 }); // Red for vertex 1
-    colors.push({ r: 0, g: 1, b: 0 }); // Green for vertex 2
-    colors.push({ r: 0, g: 0, b: 1 }); // Blue for vertex 3
 
-    // Define the triangle face using vertex indices
-    var faces = [0, 1, 2];
+    const vertices = [];
+    const normals = [];
+    const colors = ['grey', 'grey', 'grey'];
+
+    // Use actual atom positions as vertices
+    vertices.push(
+        new $3Dmol.Vector3(atom1.x, atom1.y, atom1.z),
+        new $3Dmol.Vector3(atom2.x, atom2.y, atom2.z),
+        new $3Dmol.Vector3(atom3.x, atom3.y, atom3.z)
+    );
+
+    const spec = {vertexArr:vertices, normalArr: normals, faceArr: [0,1,2], color: colors, opacity: 0.75};
     
-    // Create the custom specification for the triangle
-    var spec = {
-        vertexArr: vertices,
-        normalArr: normals,
-        faceArr: faces,
-        color: colors,
-    };
-    
-    // Add the custom object to the viewer
-    const triangle = viewer.addCustom(spec);
+    meshedTriangle = viewer.addCustom(spec);
     viewer.render();
-    return triangle;
+
+    return meshedTriangle;
 }
 
 function alignModelToVec(viewer, atom1, atom2, alignmentAxis) {
