@@ -13,7 +13,7 @@ let xyzPlanes = null;
 let mainViewer = null;
 let gizmoViewer = null;
 
-const elements = {
+const fileElements = {
     dropZone: document.getElementById('drop-zone'),
     fileInput: document.getElementById('fileInput'),
 };
@@ -22,20 +22,6 @@ const elements = {
 function preventDefaults(e) {
     e.preventDefault();
     e.stopPropagation();
-}
-
-
-function highlight() {
-    elements.dropZone.classList.add('drag-over');
-}
-
-function unhighlight() {
-    elements.dropZone.classList.remove('drag-over');
-}
-
-function handleDrop(e) {
-    const file = e.dataTransfer.files[0];
-    handleFile(file);
 }
 
 function handleFileSelect(e) {
@@ -64,21 +50,49 @@ function handleFile(file) {
 
 // Event Listeners
 function initializeUpload() {
+
+    function showDropZone() {
+        if (fileElements.dropZone.classList.contains('hidden')) {
+            fileElements.dropZone.classList.remove('hidden');
+            fileElements.dropZone.style.pointerEvents = 'auto';
+            fileElements.dropZone.style.opacity = '1';
+        }
+    }
+
+    function hideDropZone() {
+        if (!fileElements.dropZone.classList.contains('hidden')) {
+            fileElements.dropZone.classList.add('hidden');
+            fileElements.dropZone.style.pointerEvents = 'none';
+            fileElements.dropZone.style.opacity = '0';
+        }
+    }
+
+    function handleDrop(e) {
+        preventDefaults(e);
+        hideDropZone();
+        handleFile(e.dataTransfer.files[0]);
+    }
+
+    // Detect dragging over the whole document
+    document.addEventListener('dragenter', (e) => {
+        if (e.dataTransfer.types.includes('Files')) {
+            showDropZone();
+        }
+    });
+
+    document.addEventListener('dragleave', (e) => {
+        if (!e.dataTransfer.types.includes('Files')) {
+            hideDropZone();
+        }
+    });
+
+    // Drag & Drop inside drop zone
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        elements.dropZone.addEventListener(eventName, preventDefaults);
+        fileElements.dropZone.addEventListener(eventName, preventDefaults);
     });
 
-    ['dragenter', 'dragover'].forEach(eventName => {
-        elements.dropZone.addEventListener(eventName, highlight);
-    });
-
-    ['dragleave', 'drop'].forEach(eventName => {
-        elements.dropZone.addEventListener(eventName, unhighlight);
-    });
-
-    elements.dropZone.addEventListener('drop', handleDrop);
-    elements.dropZone.addEventListener('click', () => elements.fileInput.click());
-    elements.fileInput.addEventListener('change', handleFileSelect);
+    fileElements.dropZone.addEventListener('drop', handleDrop);
+    fileElements.fileInput.addEventListener('change', handleFileSelect);
 }
 
 function initCad() {
@@ -162,54 +176,61 @@ function alignToDirection(viewer, direction) {
     console.log(`Aligning to direction: ${direction}`);
 
     // Step 0: Strip brackets
-    let hkl = direction.substring(1, direction.length - 1); // Remove '[' and ']'
+    let hkl = direction.substring(1, direction.length - 1);
 
-    // Step 1: Determine direction (sign)
-    let sign = hkl.includes('-') ? -1 : 1;
-    hkl = hkl.replace('-', ''); // Remove the minus sign
-
-    // Step 2: Find the index of "1" to determine the axis
+    // Step 1: Find if there's a minus sign
+    const sign = hkl.indexOf('-') >= 0 ? -1 : 1;
+    
+    // remove the minus sign
+    hkl = hkl.replace('-', '');
+    
+    // Step 2: Find the index of "1"
     const axisIndex = hkl.indexOf('1');
 
     // Get the current view
     const currentView = viewer.getView();
     console.log(`Current view: ${currentView}`);
 
-    // Step 3: Adjust the quaternion and camera position for orthogonal alignment
-
-    // Update quaternion and camera position based on the axis
+    // Step 3: Adjust the quaternion and camera position
     if (axisIndex === 0) {
         // X-axis
-        currentView[4] = 0;      // qx
-        currentView[5] = 0.7071 * sign; // qy (flip for direction)
-        currentView[6] = 0;      // qz
-        currentView[7] = 0.7071; // qw
-        currentView[0] = sign * Math.abs(currentView[0]); // Position along X-axis
-        currentView[1] = 0; // Reset Y-axis
-        currentView[2] = 0; // Reset Z-axis
+        currentView[4] = 0;
+        currentView[5] = 0.7071 * sign;
+        currentView[6] = 0;
+        currentView[7] = 0.7071;
+        currentView[0] = sign * Math.abs(currentView[0]);
+        currentView[1] = 0;
+        currentView[2] = 0;
     } else if (axisIndex === 1) {
         // Y-axis
-        currentView[4] = 0.7071 * sign; // qx (flip for direction)
-        currentView[5] = 0;      // qy
-        currentView[6] = 0;      // qz
-        currentView[7] = 0.7071; // qw
-        currentView[1] = sign * Math.abs(currentView[1]); // Position along Y-axis
-        currentView[0] = 0; // Reset X-axis
-        currentView[2] = 0; // Reset Z-axis
+        currentView[4] = 0.7071 * sign;
+        currentView[5] = 0;
+        currentView[6] = 0;
+        currentView[7] = 0.7071;
+        currentView[1] = sign * Math.abs(currentView[1]);
+        currentView[0] = 0;
+        currentView[2] = 0;
     } else if (axisIndex === 2) {
         // Z-axis
-        currentView[4] = 0;    // qx
-        currentView[5] = 0;    // qy
-        currentView[6] = 0.7071 * sign; // qz (flip for direction)
-        currentView[7] = 0.7071; // qw
+        if (sign > 0) {
+            // Looking down Z axis ([001])
+            currentView[4] = 0;    // qx
+            currentView[5] = 0;    // qy
+            currentView[6] = 0;    // qz
+            currentView[7] = 1;    // qw
+        } else {
+            // Looking up Z axis ([00-1]) - rotate 180°
+            currentView[4] = 1;    // qx (or could use qy=1 instead)
+            currentView[5] = 0;    // qy
+            currentView[6] = 0;    // qz
+            currentView[7] = 0;    // qw
+        }
         currentView[2] = sign * Math.abs(currentView[2]); // Position along Z-axis
         currentView[0] = 0; // Reset X-axis
         currentView[1] = 0; // Reset Y-axis
     }
 
-    // Apply the updated view
     viewer.setView(currentView);
-
     console.log('Updated view:', currentView);
 }
 
@@ -397,7 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadModelXYZ(viewer);
     });
 
-    document.querySelectorAll('#axis-selector .btn-cad-action').forEach(button => {
+    document.querySelectorAll('.axis-selector .btn-cad-action').forEach(button => {
         button.addEventListener('click', event => {
             if (atomsSelectionSet.size === 2) {
                 const model = viewer.getModel();
@@ -463,18 +484,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Attach event listeners to plane views buttons
-    document.querySelectorAll('.view .direction-selector').forEach(button => {
+    document.querySelectorAll('.direction-selector').forEach(button => {
         button.addEventListener('click', event => {
             const view = event.target.getAttribute('data-view');
             alignToDirection(viewer, view);
 
-            viewer.zoomTo({model: viewer.getModel()}, 250);
+            const model = viewer.getModel();
+            if (model) {
+                viewer.zoomTo({model: viewer.getModel()}, 250);
+            }
+            
             viewer.render();
         });
     });
 
-    // Attach event listener to miller-plane-selector buttons
-    document.querySelectorAll('#miller-plane-selector .btn-cad-action').forEach(button => {
+    // Attach event listener to miller-selector buttons
+    document.querySelectorAll('.miller-selector.btn-cad-action').forEach(button => {
         button.addEventListener('click', event => {
             if (atomsSelectionSet.size === 3) {
                 const millerPlane = event.target.getAttribute('data-miller');

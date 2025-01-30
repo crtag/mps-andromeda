@@ -9,128 +9,121 @@
 </head>
 <body>
     <main>
-        <!-- Upload Section -->
-        <section id="upload-section">
-            <div id="drop-zone" class="drop-zone">
-                Drag and drop XYZ here or click to browse
+        <section id="cad-frame">
+            <!-- Upload handler -->
+            <div id="drop-zone" class="drop-zone hidden">
+                Drop XYZ here
                 <input type="file" id="fileInput" hidden accept=".xyz">
             </div>
-            <div id="status" class="status" style="display: none;"></div>
-        </section>
 
-        <section class="cad-ctrl">
-            <div class="cad-ctrl-groups">
-                <div class="cad-ctrl-group">
-                    <div class="cad-ctrl-header plane-selector">
-                        <label>(001) • XY</label>
-                        <label class="cad-ctrl-grid">
-                            <span>grid</span>
-                            <input type="checkbox" name="grid" value="xy">
-                        </label>
-                    </div>
-                    <div class="cad-ctrl-buttons view">
-                        <button class="btn-cad-action direction-selector" data-view="[001]">[001]</button>
-                        <button class="btn-cad-action direction-selector" data-view="[00-1]">[00⁻1]</button>
-                    </div>
+            <section class="cad-view-panel">
+                <div class="atom-info">
+                    <div id="atom1-info"></div>
+                    <div id="atom2-info"></div>
+                    <div id="atom3-info"></div>
                 </div>
-        
-                <div class="cad-ctrl-group">
-                    <div class="cad-ctrl-header plane-selector">
-                        <label>(100) • YZ</label>
-                        <label class="cad-ctrl-grid">
-                            <span>grid</span>
-                            <input type="checkbox" name="grid" value="yz">
-                        </label>
-                    </div>
-                    <div class="cad-ctrl-buttons view">
-                        <button class="btn-cad-action direction-selector" data-view="[100]">[100]</button>
-                        <button class="btn-cad-action direction-selector" data-view="[-100]">[⁻100]</button>
-                    </div>
-                </div>
-        
-                <div class="cad-ctrl-group">
-                    <div class="cad-ctrl-header plane-selector">
-                        <label>(010) • XZ</label>
-                        <label class="cad-ctrl-grid">
-                            <span>grid</span>
-                            <input type="checkbox" name="grid" value="xz">
-                        </label>
-                    </div>
-                    <div class="cad-ctrl-buttons view">
-                        <button class="btn-cad-action direction-selector" data-view="[010]">[010]</button>
-                        <button class="btn-cad-action direction-selector" data-view="[0-10]">[0⁻10]</button>
-                    </div>
-                </div>
-            </div>
-        </section>
 
-        <a id="cad-anchor"></a>
-        <section id="cad-frame">
-            <div id="gizmo-frame"></div>
-            <div class="atom-info">
-                <div id="atom1-info"></div>
-                <div id="atom2-info"></div>
-                <div id="atom3-info"></div>
-            </div>
-        </section>
-        <section id="alignment-frame">
-            <!-- <div class="atom-info">
-                <div id="atom1-info"></div>
-                <div id="atom2-info"></div>
-            </div> -->
+                <div class="cad-ctrl-toolbar cad-ctrl-buttons">
+                    <button class="btn-cad-action" id="download-button">Download XYZ</button>
+                    <button class="btn-cad-action" id="clear-selection-button">Clear Selection</button>
+                </div>
+                
+                <div class="cad-ctrl-groups">
+                    <div class="cad-ctrl-group">
+                        <div class="cad-ctrl-header plane-selector">
+                            <label>(001) • XY</label>
+                            <label class="cad-ctrl-grid">
+                                <span>grid</span>
+                                <input type="checkbox" name="grid" value="xy">
+                            </label>
+                        </div>
+                        <div class="cad-ctrl-buttons view">
+                            <button class="btn-cad-action direction-selector" data-view="[001]">[001]</button>
+                            <button class="btn-cad-action direction-selector" data-view="[00-1]">[00⁻1]</button>
+                        </div>
+                    </div>
             
-            <div class="alignment-controls">
-
-                <div id="translation-control">
-                    <label for="x-translation">X</label>
-                    <input type="number" id="x-translation" value="0">
-                    <label for="y-translation">Y</label>
-                    <input type="number" id="y-translation" value="0">
-                    <label for="z-translation">Z</label>
-                    <input type="number" id="z-translation" value="0">
-
-                    <button class="btn-cad-action disabled" id="translate-button">Translate</button>
+                    <div class="cad-ctrl-group">
+                        <div class="cad-ctrl-header plane-selector">
+                            <label>(100) • YZ</label>
+                            <label class="cad-ctrl-grid">
+                                <span>grid</span>
+                                <input type="checkbox" name="grid" value="yz">
+                            </label>
+                        </div>
+                        <div class="cad-ctrl-buttons view">
+                            <button class="btn-cad-action direction-selector" data-view="[100]">[100]</button>
+                            <button class="btn-cad-action direction-selector" data-view="[-100]">[⁻100]</button>
+                        </div>
+                    </div>
+            
+                    <div class="cad-ctrl-group">
+                        <div class="cad-ctrl-header plane-selector">
+                            <label>(010) • XZ</label>
+                            <label class="cad-ctrl-grid">
+                                <span>grid</span>
+                                <input type="checkbox" name="grid" value="xz">
+                            </label>
+                        </div>
+                        <div class="cad-ctrl-buttons view">
+                            <button class="btn-cad-action direction-selector" data-view="[010]">[010]</button>
+                            <button class="btn-cad-action direction-selector" data-view="[0-10]">[0⁻10]</button>
+                        </div>
+                    </div>
                 </div>
+            </section>
 
-                <div id="miller-plane-selector">
-                    <div class="plane-selector">
-                        <!-- Primary planes -->
-                        <button class="btn-cad-action miller-selector" data-miller="[100]" title="YZ plane">[100]</button>
-                        <button class="btn-cad-action miller-selector" data-miller="[-100]" title="-YZ plane">[-100]</button>
-                        <button class="btn-cad-action miller-selector" data-miller="[010]" title="XZ plane">[010]</button>
-                        <button class="btn-cad-action miller-selector" data-miller="[-010]" title="-XZ plane">[-010]</button>
-                        <button class="btn-cad-action miller-selector" data-miller="[001]" title="XY plane">[001]</button>
-                        <button class="btn-cad-action miller-selector" data-miller="[-001]" title="-XY plane">[-001]</button>
+            <div id="gizmo-frame"></div>
+            
+            <section class="alignment-controls">
+                <div class="controls-panel">
+
+                    <div id="translation-control">
+                        <label for="x-translation">X</label>
+                        <input type="number" id="x-translation" value="0">
+                        <label for="y-translation">Y</label>
+                        <input type="number" id="y-translation" value="0">
+                        <label for="z-translation">Z</label>
+                        <input type="number" id="z-translation" value="0">
+                        
+                        <button class="btn-cad-action disabled" id="translate-button">Translate</button>
                     </div>
                     
-                    <div class="plane-selector">
-                        <!-- Rest of diagonal and higher index planes remain the same -->
-                        <button class="btn-cad-action miller-selector" data-miller="[110]">[110]</button>
-                        <button class="btn-cad-action miller-selector" data-miller="[101]">[101]</button>
-                        <button class="btn-cad-action miller-selector" data-miller="[011]">[011]</button>
-                        <button class="btn-cad-action miller-selector" data-miller="[111]">[111]</button>
-                        <button class="btn-cad-action miller-selector" data-miller="[112]">[112]</button>
-                        <button class="btn-cad-action miller-selector" data-miller="[121]">[121]</button>
-                        <button class="btn-cad-action miller-selector" data-miller="[211]">[211]</button>
-                        <button class="btn-cad-action miller-selector" data-miller="[122]">[122]</button>
-                        <button class="btn-cad-action miller-selector" data-miller="[212]">[212]</button>
-                        <button class="btn-cad-action miller-selector" data-miller="[221]">[221]</button>
-                    </div>
-                </div>
+                    <div class="alignment-btn-panel">
+                        <div class="plane-selector">
+                            <!-- Primary planes -->
+                            <button class="btn-cad-action miller-selector" data-miller="[100]" title="YZ plane">[100]</button>
+                            <button class="btn-cad-action miller-selector" data-miller="[-100]" title="-YZ plane">[⁻100]</button>
+                            <button class="btn-cad-action miller-selector" data-miller="[010]" title="XZ plane">[010]</button>
+                            <button class="btn-cad-action miller-selector" data-miller="[-010]" title="-XZ plane">[⁻010]</button>
+                            <button class="btn-cad-action miller-selector" data-miller="[001]" title="XY plane">[001]</button>
+                            <button class="btn-cad-action miller-selector" data-miller="[-001]" title="-XY plane">[⁻001]</button>
+                        </div>
+                        
+                        <div class="plane-selector">
+                            <!-- Rest of diagonal and higher index planes remain the same -->
+                            <button class="btn-cad-action miller-selector" data-miller="[110]">[110]</button>
+                            <button class="btn-cad-action miller-selector" data-miller="[101]">[101]</button>
+                            <button class="btn-cad-action miller-selector" data-miller="[011]">[011]</button>
+                            <button class="btn-cad-action miller-selector" data-miller="[111]">[111]</button>
+                            <button class="btn-cad-action miller-selector" data-miller="[112]">[112]</button>
+                            <button class="btn-cad-action miller-selector" data-miller="[121]">[121]</button>
+                            <button class="btn-cad-action miller-selector" data-miller="[211]">[211]</button>
+                            <button class="btn-cad-action miller-selector" data-miller="[122]">[122]</button>
+                            <button class="btn-cad-action miller-selector" data-miller="[212]">[212]</button>
+                            <button class="btn-cad-action miller-selector" data-miller="[221]">[221]</button>
+                        </div>
 
-                <div id="axis-selector">
-                    <div>
-                        <button class="btn-cad-action miller-selector" data-miller="(100)">(100)</button>
-                        <button class="btn-cad-action miller-selector" data-miller="(010)">(010)</button>
-                        <button class="btn-cad-action miller-selector" data-miller="(001)">(001)</button>
+                        <div class="axis-selector">
+                            <button class="btn-cad-action miller-selector" data-miller="(100)">(100)</button>
+                            <button class="btn-cad-action miller-selector" data-miller="(010)">(010)</button>
+                            <button class="btn-cad-action miller-selector" data-miller="(001)">(001)</button>
+                        </div>
                     </div>
-                </div>
 
-                <div id="workflow-controls">
-                    <button class="btn-cad-action" id="clear-selection-button">Clear Selection</button>
-                    <button class="btn-cad-action" id="download-button">Download XYZ</button>
                 </div>
-            </div>
+            </section>
+
         </section>
 
     </main>
