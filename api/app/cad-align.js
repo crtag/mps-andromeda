@@ -251,7 +251,9 @@ function renderXYZdata(viewer, data) {
     }
     
     let model = viewer.addModel(data, "xyz");
+    
     handleAtomSelection(viewer);
+    handleAtomHover(viewer);
 
     viewer.center({});
     viewer.zoomTo({model}, 250);
@@ -274,6 +276,31 @@ function clearAtomsSelection(viewer) {
 
     viewer.setStyle({}, defaultViewerStyle);
     viewer.render();
+}
+
+function handleAtomHover(viewer) {
+    viewer.setHoverDuration(100);
+    viewer.setHoverable({}, true, 
+    (atom) => {
+        if (!atom.label) {
+            atom.label = viewer.addLabel(` ${atom.index + 1}: ${atom.atom} `, 
+                {
+                    position: atom, 
+                    backgroundColor: 'white',
+                    backgroundOpacity: 0.75, 
+                    fontColor: 'black',
+                    font: 'monospace',
+                    inFront: true, 
+                }
+            );
+        }
+    },
+    (atom) => {
+        if (atom.label) {
+            viewer.removeLabel(atom.label);
+            delete atom.label;
+        }
+    });
 }
 
 function handleAtomSelection(viewer) {
@@ -493,7 +520,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (model) {
                 viewer.zoomTo({model: viewer.getModel()}, 250);
             }
-            
+
             viewer.render();
         });
     });
