@@ -4,6 +4,8 @@ let defaultViewerStyle = {stick:{}, sphere:{radius: 0.5}, clicksphere:{radius: 0
 let selectedAtomStyle = {sphere: {color: '#FF69B4', radius: 0.75 }};
 const atomsSelectionSet = new Set();
 let alignmentLineVec = null;
+let alignmentLineVecLabel = null;
+
 let alignmentPlaneVec = null;
 let alignmentAxis = null;
 let modelXYZfileName = null;
@@ -267,7 +269,9 @@ function clearAtomsSelection(viewer) {
     // remove any alignment lines or planes
     if (alignmentLineVec) {
         viewer.removeShape(alignmentLineVec);
+        viewer.removeLabel(alignmentLineVecLabel);
         alignmentLineVec = null;
+        alignmentLineVecLabel = null;
     }
     if (alignmentPlaneVec) {
         viewer.removeShape(alignmentPlaneVec);
@@ -322,7 +326,9 @@ function handleAtomSelection(viewer) {
 
         if (atomsSelectionSet.size !== 2 && alignmentLineVec) {
             viewer.removeShape(alignmentLineVec);
+            viewer.removeLabel(alignmentLineVecLabel);
             alignmentLineVec = null;
+            alignmentLineVecLabel = null;
         }
 
         if (atomsSelectionSet.size === 3 && !alignmentPlaneVec) {
@@ -363,6 +369,22 @@ function drawArrow(viewer, atom1, atom2) {
             color: "#40E0D0",
             radiusRatio: 3, 
             midpos: -2.00,
+        }
+    );
+
+    // add label to the arrow, position it at the midpoint
+    // the label must display the distance between the two atoms
+    // create Vector3 and use the distanceTo method
+    const midPoint = new $3Dmol.Vector3((atom1.x + atom2.x) / 2, (atom1.y + atom2.y) / 2, (atom1.z + atom2.z) / 2);
+    const distance = new $3Dmol.Vector3(atom1.x, atom1.y, atom1.z).distanceTo(new $3Dmol.Vector3(atom2.x, atom2.y, atom2.z));
+    alignmentLineVecLabel = viewer.addLabel(`${distance.toFixed(6)} Å`, 
+        {
+            position: midPoint, 
+            backgroundColor: 'white', 
+            backgroundOpacity: 0.75,
+            fontColor: 'black', 
+            font: 'monospace', 
+            inFront: true
         }
     );
  
@@ -455,6 +477,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 alignModelToVec(viewer, atoms[0], atoms[1], event.target.getAttribute('data-miller'));
 
                 viewer.removeShape(alignmentLineVec);
+                viewer.removeLabel(alignmentLineVecLabel);
+                alignmentLineVecLabel = null;
+
                 viewer.setStyle({}, defaultViewerStyle);
                 viewer.zoomTo({model}, 250);
                 viewer.render();
