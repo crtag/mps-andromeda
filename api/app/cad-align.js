@@ -367,7 +367,7 @@ function drawArrow(viewer, atom1, atom2) {
             start: {x: atom1.x, y: atom1.y, z: atom1.z},
             end: { x: atom2.x, y: atom2.y, z: atom2.z},
             color: "#40E0D0",
-            radiusRatio: 3, 
+            radiusRatio: 2, 
             midpos: -2.00,
         }
     );
