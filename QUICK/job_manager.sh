@@ -70,7 +70,8 @@ fi
 APP_EXECUTABLE="${APP_EXECUTABLE:-$DEFAULT_APP_EXECUTABLE}"
 
 # Interval overridable by environment variable
-STATUS_CHECK_INTERVAL="${STATUS_CHECK_INTERVAL:-$DEFAULT_STATUS_CHECK_INTERVAL}"
+STATUS_CHECK_INTERVAL=${STATUS_CHECK_INTERVAL:-$DEFAULT_STATUS_CHECK_INTERVAL}
+STATUS_CHECK_INTERVAL=$(printf "%d" "$STATUS_CHECK_INTERVAL")
 
 # Define API endpoints
 JOB_ASSIGNMENT_ENDPOINT="${API_URL_JOB_ASSIGNMENT}"
@@ -344,7 +345,7 @@ main_loop() {
         truncate_old_logs
 
         # Sleep before the next cycle
-        sleep "$STATUS_CHECK_INTERVAL"
+        sleep $STATUS_CHECK_INTERVAL
     done
 }
 
