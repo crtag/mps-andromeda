@@ -152,6 +152,7 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
 
         const metadata = isTrajectoryJob ? {
             ...defaultMeta,
+            isTrajectoryJob: true,
             direction: req.body.direction,
             stepSize: req.body.stepSize,
             numSteps: req.body.numSteps,
