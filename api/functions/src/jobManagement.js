@@ -92,8 +92,23 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
         return;
     }
 
+    // see if dry run is indicated in query string via dryRun=true
+    const dryRun = req.query?.dryRun === "true";
+
+    let content;
+
     try {
-        const content = atob(req.body.content);
+        content = atob(req.body.content);
+    } catch (error) {
+        logger.error("Error decoding job file content. Expected base64 encodning.", error);
+        res.status(400).json({
+            success: false,
+            message: "Error decoding job file content. Expected base64 encodning.",
+        });
+        return;
+    }
+
+    try {
         const originalFilename = req.body.filename;
 
         if (!content || !originalFilename) {
@@ -143,6 +158,17 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
             steeredAtoms: req.body.steeredAtoms,
             step: 1, // unconventionally start at 1
         } : defaultMeta;
+
+        if (dryRun) {
+            res.status(200).json({
+                success: true,
+                message: "Job spec validated successfully, dry run complete",
+                filename,
+                content,
+                metadata,
+            });
+            return;
+        }
 
         // Save to storage
         await saveJobFile(filename, content, "spec", metadata);
