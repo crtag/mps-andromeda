@@ -72,7 +72,7 @@ function handleFile(file) {
     const reader = new FileReader();
     reader.onload = async (e) => {
         const content = e.target.result;
-        await uploadFile(file.name, content);
+        await uploadFile(file.name, btoa(content));
     };
     reader.readAsText(file);
 }

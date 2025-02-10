@@ -140,3 +140,67 @@ h2 > div {
 .btn-clipboard img {
     vertical-align: text-bottom;
 }
+
+
+.form-group, .direction-group {
+    margin: 20px 0 0;
+}
+
+.form-group label, .direction-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.form-group input,
+.form-group select {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.submit-btn {
+    background: #0066cc;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 20px;
+    float: right;
+}
+
+.submit-btn:hover {
+    background: #0052a3;
+}
+
+.direction-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    margin-top: 10px;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.step-details {
+    display: flex;
+    gap: 20px;
+}
+
+.step-details .form-group {
+    flex: 1;
+}
+
+textarea {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    resize: vertical;
+}

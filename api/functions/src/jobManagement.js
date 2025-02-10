@@ -93,7 +93,7 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
     }
 
     try {
-        const content = req.body.content;
+        const content = atob(req.body.content);
         const originalFilename = req.body.filename;
 
         if (!content || !originalFilename) {
@@ -125,12 +125,27 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
         // extract the first line of the file to use as the job spec in metadata
         const jobSpec = content.split("\n")[0];
 
-        // Save to storage
-        await saveJobFile(filename, content, "spec", {
+        // detect Trajectory Simulation job type
+        const isTrajectoryJob = req.body.direction && req.body.stepSize && req.body.numSteps && req.body.steeredAtoms;
+
+        // create metadata object based on the job type
+        const defaultMeta = {
             status: "PENDING",
             submitTime: new Date().toISOString(),
             jobSpec,
-        });
+        };
+
+        const metadata = isTrajectoryJob ? {
+            ...defaultMeta,
+            direction: req.body.direction,
+            stepSize: req.body.stepSize,
+            numSteps: req.body.numSteps,
+            steeredAtoms: req.body.steeredAtoms,
+            step: 1, // unconventionally start at 1
+        } : defaultMeta;
+
+        // Save to storage
+        await saveJobFile(filename, content, "spec", metadata);
 
         res.status(200).json({
             success: true,
