@@ -12,6 +12,7 @@ if (!admin.apps.length) {
 const storage = getStorage();
 const JOBS_PREFIX = "job-specs/";
 const RESULTS_PREFIX = "job-results/";
+const TRAJECTORY_PREFIX = "job-trajectories/";
 
 // Get default bucket reference
 const getBucket = () => storage.bucket();
@@ -329,7 +330,9 @@ async function parseSimulationOutput(filename) {
         inputFile = getBucket().file(`${RESULTS_PREFIX}${filename}.in`);
     } catch (error) {
         logger.error("Error getting input file. ", error);
-        return false;
+        return {
+            status: false,
+        };
     }
 
     let inputMetadata;
@@ -337,7 +340,9 @@ async function parseSimulationOutput(filename) {
         [inputMetadata] = await inputFile.getMetadata();
         if (!inputMetadata.metadata.normalTermination) {
             logger.warn(`Job ${filename} did not terminate normally, nothing to parse.`);
-            return false;
+            return {
+                status: false,
+            };
         }
     } catch (error) {
         logger.error("Error getting metadata for job, trying anyway with the parser. ", error);
@@ -349,7 +354,9 @@ async function parseSimulationOutput(filename) {
         outputFile = getBucket().file(`${RESULTS_PREFIX}${filename}.out`);
     } catch (error) {
         logger.error("Error getting output file, can't proceed with parsing. ", error);
-        return false;
+        return {
+            status: false,
+        };
     }
 
     // download the output file content
@@ -358,7 +365,9 @@ async function parseSimulationOutput(filename) {
         [content] = await outputFile.download();
     } catch (error) {
         logger.error("Error downloading output file content, aborting. ", error);
-        return false;
+        return {
+            status: false,
+        };
     }
 
     const outputContent = content.toString("utf8");
@@ -396,8 +405,9 @@ async function parseSimulationOutput(filename) {
     }
 
     // update metadata with the extracted simulation results object properties
+    let refreshedMetadata;
     try {
-        await inputFile.setMetadata({
+        [refreshedMetadata] = await inputFile.setMetadata({
             metadata: {
                 ...inputMetadata.metadata,
                 ...parsedResults,
@@ -406,10 +416,15 @@ async function parseSimulationOutput(filename) {
         });
     } catch (error) {
         logger.error("Error updating metadata for input file. ", error);
-        return false;
+        return {
+            status: false,
+        };
     }
 
-    return true;
+    return {
+        status: true,
+        metadata: refreshedMetadata.metadata,
+    };
 }
 
 async function updateJobStatus(filename, status, additionalMetadata = {}) {
@@ -457,6 +472,29 @@ async function moveJobToResults(filename) {
     }
 }
 
+async function moveJobToTrajectory(filename) {
+    try {
+        const sourcePath = `${RESULTS_PREFIX}${filename}`;
+        const sourceFile = getBucket().file(sourcePath);
+
+        // Get the metadata of the source file
+        const [metadata] = await sourceFile.getMetadata();
+
+        // First, copy the spec file to results with the existing metadata
+        await sourceFile.copy(`${TRAJECTORY_PREFIX}${filename}`, {
+            metadata: metadata.metadata,
+        });
+
+        // Then delete the original
+        await sourceFile.delete();
+
+        logger.info(`Moved ${filename} to trajectory results`);
+        return true;
+    } catch (error) {
+        logger.warn("Error moving job file to trajectory results, could have been moved earlier?", error);
+    }
+}
+
 module.exports = {
     listPendingJobs,
     listCompletedJobs,
@@ -465,6 +503,7 @@ module.exports = {
     updateJobMeta,
     updateJobStatus,
     moveJobToResults,
+    moveJobToTrajectory,
     trackNormalTermination,
     parseSimulationOutput,
     JOBS_PREFIX,

@@ -1,3 +1,5 @@
+const {logger} = require("firebase-functions");
+
 /**
  * Extract content between two separators
  * @param {string} content - Full text content
@@ -25,6 +27,30 @@ function extractSection(content, startSep, endSep, includeSeparators = false) {
     }
 
     return content.slice(startIndex, endIndex).trim();
+}
+
+/**
+ * Extracts the last section of content after the specified separator
+ * @param {string} content - The input string to process
+ * @param {string} [separator="\n\n"] - The separator to split on (defaults to double newline)
+ * @return {string} The extracted content after last separator, empty string if not found or empty input
+ */
+function extractReverse(content, separator = "\n\n") {
+    if (!content) return "";
+    logger.info("Extracting content after last separator");
+    logger.info(content);
+
+    // Find the last occurrence of separator
+    const lastSeparatorIndex = content.lastIndexOf(separator);
+
+    // If no separator is found
+    if (lastSeparatorIndex === -1) {
+        logger.warn("Separator not found in content!");
+        return "";
+    }
+
+    // Extract everything after the last blank line
+    return content.slice(lastSeparatorIndex + separator.length).trim();
 }
 
 function extractMoleculeInput(content) {
@@ -120,4 +146,57 @@ function extractSimulationResults(content) {
     return {optimizedGeometry, minimizedEnergy, totalTime};
 }
 
-module.exports = {extractSection, extractMoleculeInput, extractSimulationResults};
+/**
+ * Steer the XYZ coordinates of atoms in the given direction.
+ *
+ * @param {string} currentXYZ - The current all atoms XYZ format, one line per atom.
+ * Type of atom, then X, Y, Z coordinates, all space-separated.
+ * @param {string} steeredAtoms - The indices of the atoms to steer. Once-based list.
+ * @param {number} stepSize - The step size to steer the atoms. In angstroms.
+ * @param {string} hkl - The direction to steer the atoms. Miller indices in square brackets.
+ * @return {string} The new XYZ formatted list.
+ */
+function steerXYZ(currentXYZ, steeredAtoms, stepSize, hkl) {
+    // parse the direction string to get the vector, square brackets are optional
+    // either of h k l can have a minus indicating the opposite direction
+    const directionMatch = hkl.match(/^\[?([01-]+)\]?$/);
+    if (!directionMatch) {
+        throw new Error("Invalid direction format case 1, must match [hkl] with optional minus sign");
+    }
+    // find the minus sign and extract it
+    const sign = directionMatch[1].indexOf("-") !== -1 ? -1 : 1;
+    let direction = directionMatch[1].replace("-", "");
+    // figure out direction by position of h, k, l in the string
+    // we actually need only an index to use it to reference X Y or Z in the atom line
+    // so we can use a simple switch statement
+    direction = direction.indexOf("1");
+    // if the direction is not found, it means the direction is not valid
+    if (direction === -1) {
+        throw new Error("Invalid direction format case 2, must match [hkl] with optional minus sign");
+    }
+
+    // split the atom list with coordinates into lines
+    const xyzLines = currentXYZ.trim().split("\n");
+
+    // split the list of atoms to steer into an array of integers, separator can be
+    // anything that is not a digit
+    const atoms = steeredAtoms.split(/\D+/).map((i) => parseInt(i));
+
+    // steer the atoms, mind zero based lines list
+    for (const atom of atoms) {
+        const line = xyzLines[atom - 1];
+        if (!line) {
+            throw new Error(`Atom index ${atom} out of bounds. Expected in 1 to ${xyzLines.length} range.`);
+        }
+        const currentPos = line.split(/\s+/);
+        // we need to add the step size to the current position
+        currentPos[direction + 1] = parseFloat(currentPos[direction + 1].trim()) + sign * stepSize;
+
+        // unfold back into string line
+        xyzLines[atom - 1] = currentPos.join("    ");
+    }
+
+    return xyzLines.join("\n");
+}
+
+module.exports = {extractSection, extractReverse, extractMoleculeInput, extractSimulationResults, steerXYZ};

@@ -7,8 +7,9 @@ const {
     getJobFile,
     trackNormalTermination,
     parseSimulationOutput,
+    moveJobToTrajectory,
 } = require("../storageOperations");
-const {extractMoleculeInput} = require("../outputOperations");
+const {extractMoleculeInput, extractReverse, steerXYZ} = require("../outputOperations");
 
 async function handleJobCompletion(filenameKey) {
     // Update status and move job spec to results, in this order
@@ -22,7 +23,85 @@ async function handleJobCompletion(filenameKey) {
 
     // this must be run after the job spec is moved to results
     // so all metadata and output are finalized
-    await parseSimulationOutput(filenameKey);
+    const res = await parseSimulationOutput(filenameKey);
+
+    // check if this was a trajectory job
+    // typical metadata for a trajectory job
+    // "metadata": {
+    //     "status": "PENDING",
+    //     "submitTime": "2025-02-10T02:34:15.714Z",
+    //     "jobSpec": "DFT B3LYP D3MBJ BASIS=3-21G CONSTRAIN OPTIMIZE ICOORD=0",
+    //     "direction": "[100]",
+    //     "stepSize": 0.1,
+    //     "numSteps": 50,
+    //     "steeredAtoms": "25 112",
+    //     "step": 1
+    // }
+    if (res.metadata?.isTrajectoryJob) {
+        logger.info("Handling trajectory job completion");
+        // see what step we are on now
+        const currentStep = res.metadata.step;
+        const totalSteps = res.metadata.numSteps;
+        logger.info(`Current step ${currentStep} of ${totalSteps}`);
+
+        if (currentStep < totalSteps) {
+            const nextStep = parseInt(currentStep) + 1;
+            // - create a new job spec with the next step, upload it to specs folder, this includes
+            //   steering atoms coordinates update
+            const specs = res.metadata.jobSpec;
+            // get current XYZ from the output file
+            // file name is filenameKey.xyz
+            let currentXYZ = await getJobFile(`${filenameKey}.xyz`, "result");
+            // strip off the first line with the number of atoms and the second line with the comment
+            currentXYZ = currentXYZ.split("\n").slice(2).join("\n");
+            logger.info("Current XYZ", currentXYZ);
+
+            let nextXYZ;
+            try {
+                nextXYZ = steerXYZ(currentXYZ,
+                    res.metadata.steeredAtoms,
+                    res.metadata.stepSize,
+                    res.metadata.direction);
+                logger.info("Next XYZ", nextXYZ);
+            } catch (error) {
+                logger.error("Error steering XYZ", error);
+            }
+
+            // get the job spec file content and extract CONSTRAINT section fron the end
+            const currentJobContent = await getJobFile(`${filenameKey}.in`, "result");
+            const constraintSection = extractReverse(currentJobContent);
+
+            // create new job with spec, xyz and constraint section
+            const newJobContent = `${specs}\n\n${nextXYZ}\n\n${constraintSection}`;
+
+            // drop unnecessary metadata
+            delete res.metadata.totalTime;
+            delete res.metadata.completionTime;
+            delete res.metadata.lastOutputLine;
+            delete res.metadata.normalTermination;
+            delete res.metadata.minimizedEnergy;
+            delete res.metadata.optimizedGeometrySaved;
+            delete res.metadata.lastUpdate;
+
+            // reconstruct full metadata
+            const metadata = {
+                ...res.metadata,
+                step: nextStep,
+                status: "PENDING",
+                submitTime: new Date().toISOString(),
+            };
+
+            // replace the first index which is digit followed by underscore with new step
+            const newFilenameKey = filenameKey.replace(/^\d+_/g, `${nextStep}_`);
+
+            // create new job spec
+            await saveJobFile(`${newFilenameKey}.in`, newJobContent, "spec", metadata);
+        }
+        // move the previous resulting files to the trajectory results folder
+        await moveJobToTrajectory(`${filenameKey}.in`);
+        await moveJobToTrajectory(`${filenameKey}.out`);
+        await moveJobToTrajectory(`${filenameKey}.xyz`);
+    }
 }
 
 async function handleJobFailure(filenameKey) {

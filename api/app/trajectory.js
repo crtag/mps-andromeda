@@ -1,6 +1,6 @@
 // Constants
 const API = {
-    UPLOAD: 'https://uploadjobspec-poloq3qrtq-uc.a.run.app',
+    UPLOAD: 'https://uploadjobspec-poloq3qrtq-uc.a.run.app', // use ?dryRun=true for testing
 };
 
 // DOM Elements

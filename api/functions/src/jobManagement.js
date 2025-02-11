@@ -99,6 +99,9 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
 
     try {
         content = atob(req.body.content);
+        content = content.trim();
+        // replace all windows line endings with unix line endings
+        content = content.replace(/\r\n/g, "\n");
     } catch (error) {
         logger.error("Error decoding job file content. Expected base64 encodning.", error);
         res.status(400).json({
@@ -135,7 +138,7 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
         const timestamp = new Date().toISOString()
             .replace(/[^0-9]/g, "") // Remove non-digits
             .slice(0, 12); // Take first 12 digits (enough for uniqueness)
-        const filename = `${safeFilename}_${timestamp}.in`;
+        let filename = `${safeFilename}_${timestamp}.in`;
 
         // extract the first line of the file to use as the job spec in metadata
         const jobSpec = content.split("\n")[0];
@@ -170,6 +173,8 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
             });
             return;
         }
+
+        filename = isTrajectoryJob ? `1_${filename}` : filename;
 
         // Save to storage
         await saveJobFile(filename, content, "spec", metadata);
@@ -264,7 +269,7 @@ exports.terminationPostParseHandler = onRequest({cors: true}, async (req, res) =
         }
         await updateJobMeta(`${baseFilename}.in`, "result", metaUpdate);
 
-        const parseRes = await parseSimulationOutput(baseFilename);
+        const {status: parseRes} = await parseSimulationOutput(baseFilename);
         if (!parseRes) {
             res.status(500).send("Job output parsing failed");
             return;

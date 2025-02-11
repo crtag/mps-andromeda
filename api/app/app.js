@@ -126,7 +126,7 @@ async function fetchJobs() {
         if (!pendingResponse.ok) throw new Error('Failed to fetch pending/running jobs');
         const activeJobs = await pendingResponse.json();
         
-        const pending = activeJobs.filter(job => job.status === 'PENDING');
+        const pending = activeJobs.filter(job => job.status !== 'RUNNING');
         const running = activeJobs.filter(job => job.status === 'RUNNING');
         
         updateJobsList('pending-jobs', pending);
@@ -180,7 +180,8 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
                 </div>
                 
                 <div class="job-time">
-                    ${job?.submitTime ? `Submitted: ${new Date(job.submitTime).toLocaleString()}` : ''}    
+                    Status: <strong>${job.status}</strong>
+                    ${job?.submitTime ? `<br>Submitted: ${new Date(job.submitTime).toLocaleString()}` : ''}    
                     ${!isCompleted && job?.startTime ? `<br>Started: ${new Date(job.startTime).toLocaleString()}` : ''}
                     ${isCompleted && job?.completionTime ? `&emsp; Completed: ${new Date(job.completionTime).toLocaleString()}` : ''}
 
