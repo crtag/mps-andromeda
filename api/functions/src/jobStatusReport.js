@@ -40,12 +40,12 @@ async function handleJobCompletion(filenameKey) {
     if (res.metadata?.isTrajectoryJob) {
         logger.info("Handling trajectory job completion");
         // see what step we are on now
-        const currentStep = res.metadata.step;
-        const totalSteps = res.metadata.numSteps;
+        const currentStep = parseInt(res.metadata.step);
+        const totalSteps = parseInt(res.metadata.numSteps);
         logger.info(`Current step ${currentStep} of ${totalSteps}`);
 
         if (currentStep < totalSteps) {
-            const nextStep = parseInt(currentStep) + 1;
+            const nextStep = currentStep + 1;
             // - create a new job spec with the next step, upload it to specs folder, this includes
             //   steering atoms coordinates update
             const specs = res.metadata.jobSpec;
@@ -98,9 +98,21 @@ async function handleJobCompletion(filenameKey) {
             await saveJobFile(`${newFilenameKey}.in`, newJobContent, "spec", metadata);
         }
         // move the previous resulting files to the trajectory results folder
-        await moveJobToTrajectory(`${filenameKey}.in`);
-        await moveJobToTrajectory(`${filenameKey}.out`);
-        await moveJobToTrajectory(`${filenameKey}.xyz`);
+        try {
+            await moveJobToTrajectory(`${filenameKey}.in`);
+        } catch (error) {
+            logger.error("Error moving job spec to trajectory", error);
+        }
+        try {
+            await moveJobToTrajectory(`${filenameKey}.out`);
+        } catch (error) {
+            logger.error("Error moving job output to trajectory", error);
+        }
+        try {
+            await moveJobToTrajectory(`${filenameKey}.xyz`);
+        } catch (error) {
+            logger.error("XYZ file not found, skipping move to trajectory", error);
+        }
     }
 }
 
