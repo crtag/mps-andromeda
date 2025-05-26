@@ -1,0 +1,20 @@
+# File: Dockerfile.binaries
+# Build: docker build -f Dockerfile.binaries -t your-private-repo/terachem-binaries:latest .
+# Push: docker push your-private-repo/terachem-binaries:latest
+
+FROM ubuntu:22.04
+
+# Install minimal dependencies for extraction
+RUN apt-get update -y \
+    && apt-get install -y tar gzip \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy and extract the Terachem evaluation bundle
+COPY terachem1.96H-beta-250307.tar.gz /tmp/
+RUN cd /tmp \
+    && tar -xf terachem1.96H-beta-250307.tar.gz -C /opt/ \
+    && rm /tmp/terachem1.96H-beta-250307.tar.gz
+
+# Make binaries executable
+RUN chmod +x /opt/terachem-1.96H/bin/* 2>/dev/null || true
