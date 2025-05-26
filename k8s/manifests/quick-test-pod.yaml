@@ -6,8 +6,16 @@ spec:
   restartPolicy: OnFailure
   containers:
     - name: quick-app
-      image: "crtag/quick-app:1.0.0"
+      image: "crtag/quick-app:1.0.2"
       command: ["tail", "-f", "/dev/null"]
       resources:
         limits:
           nvidia.com/gpu: 1
+      volumeMounts:
+        - name: shared-folder
+          mountPath: /mnt/shared-folder
+  volumes:
+    - name: shared-folder
+      hostPath:
+        path: /srv/k8s-shared
+        type: DirectoryOrCreate
