@@ -251,9 +251,17 @@ function renderXYZdata(viewer, data) {
             el.checked = false;
         });
     }
-    
+
+/*     let models = viewer.addModelsAsFrames(data, "xyz");
+    viewer.animate({loop: "forward", interval: 200});
+    viewer.center({});
+    viewer.zoomTo({models}, 250);
+    viewer.setStyle({}, defaultViewerStyle);
+    viewer.render(); */
+
+
     let model = viewer.addModel(data, "xyz");
-    
+
     handleAtomSelection(viewer);
     handleAtomHover(viewer);
 
