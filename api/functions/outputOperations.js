@@ -226,7 +226,7 @@ function parseHKLToUnitVector(hklStr) {
             tokens = parseCompactHKL(withoutBrackets);
         } catch (error) {
             // If compact parsing also fails, fall through to the main error with original tokens
-            console.error("Compact parsing failed:", error);
+            logger.error("Compact parsing failed:", error);
         }
     }
 
@@ -359,6 +359,9 @@ function formatXYZ(records) {
  * @return {Array<{type: string, x: number, y: number, z: number}>} New records with applied steering
  */
 function applySteer(records, selectedIndices, stepSize, unitDir) {
+    // ensure stepSize is a number as it can be passed as a string
+    stepSize = Number(stepSize);
+
     if (!Number.isFinite(stepSize) || stepSize === 0) {
         throw new Error("stepSize must be a finite non-zero number");
     }
@@ -404,6 +407,13 @@ function applySteer(records, selectedIndices, stepSize, unitDir) {
  * @return {string} Updated XYZ coordinate string
  */
 function steerXYZ(currentXYZ, steeredAtoms, stepSize, hkl) {
+    // log input parameters
+    logger.info("steerXYZ called with:");
+    logger.info("XYZ:");
+    logger.info(currentXYZ);
+    logger.info("Parameters:");
+    logger.info({steeredAtoms, stepSize, hkl });
+
     const records = parseXYZ(currentXYZ);
     const unitDir = parseHKLToUnitVector(hkl);
     const selected = parseSteeredAtoms(steeredAtoms, records.length);

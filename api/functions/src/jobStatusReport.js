@@ -54,7 +54,8 @@ async function handleJobCompletion(filenameKey) {
             let currentXYZ = await getJobFile(`${filenameKey}.xyz`, "result");
             // strip off the first line with the number of atoms and the second line with the comment
             currentXYZ = currentXYZ.split("\n").slice(2).join("\n");
-            logger.info("Current XYZ", currentXYZ);
+            logger.info("Current XYZ:");
+            logger.info(currentXYZ);
 
             let nextXYZ;
             try {
@@ -62,9 +63,10 @@ async function handleJobCompletion(filenameKey) {
                     res.metadata.steeredAtoms,
                     res.metadata.stepSize,
                     res.metadata.direction);
-                logger.info("Next XYZ", nextXYZ);
+                logger.info("Next XYZ:");
+                logger.info(nextXYZ);
             } catch (error) {
-                logger.error("Error steering XYZ", error);
+                logger.error("Error steering XYZ, ", error);
             }
 
             // get the job spec file content and extract CONSTRAINT section fron the end
