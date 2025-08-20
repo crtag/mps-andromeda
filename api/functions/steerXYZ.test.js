@@ -108,14 +108,14 @@ describe("steerXYZ", () => {
             const input = "C 0.0 0.0 0.0";
             expect(() => {
                 steerXYZ(input, "1", 0.1, "[1 0]");
-            }).toThrow("Expected exactly 3 HKL components");
+            }).toThrow("Invalid HKL format '[1 0]': Expected exactly 3 components");
         });
 
         test("Zero vector HKL", () => {
             const input = "C 0.0 0.0 0.0";
             expect(() => {
                 steerXYZ(input, "1", 0.1, "[0,0,0]");
-            }).toThrow("HKL direction cannot be zero vector");
+            }).toThrow("Invalid HKL format '[0,0,0]': Direction cannot be zero vector");
         });
 
         test("Out-of-range atom index - too low", () => {
@@ -229,6 +229,120 @@ describe("steerXYZ", () => {
             const result3 = steerXYZ(input, "1", 1.0, "[1,0,0]");
             const atoms3 = parseXYZResult(result3);
             expectClose(atoms3[0].x, 1.0);
+        });
+    });
+
+    describe("Compact HKL Format Support", () => {
+        test("Compact format [01-1] - first zero, second positive, third negative", () => {
+            const input = "C 0.0 0.0 0.0";
+            const result = steerXYZ(input, "1", Math.sqrt(2), "[01-1]"); // norm = sqrt(0^2 + 1^2 + (-1)^2) = sqrt(2)
+            const atoms = parseXYZResult(result);
+            
+            // Expected: x += 0, y += 1, z += -1
+            expectClose(atoms[0].x, 0.0);
+            expectClose(atoms[0].y, 1.0);
+            expectClose(atoms[0].z, -1.0);
+        });
+
+        test("Compact format [011] - all positive", () => {
+            const input = "C 0.0 0.0 0.0";
+            const result = steerXYZ(input, "1", Math.sqrt(2), "[011]"); // norm = sqrt(0^2 + 1^2 + 1^2) = sqrt(2)
+            const atoms = parseXYZResult(result);
+            
+            // Expected: x += 0, y += 1, z += 1
+            expectClose(atoms[0].x, 0.0);
+            expectClose(atoms[0].y, 1.0);
+            expectClose(atoms[0].z, 1.0);
+        });
+
+        test("Compact format [10-1] - first positive, second zero, third negative", () => {
+            const input = "C 0.0 0.0 0.0";
+            const result = steerXYZ(input, "1", Math.sqrt(2), "[10-1]"); // norm = sqrt(1^2 + 0^2 + (-1)^2) = sqrt(2)
+            const atoms = parseXYZResult(result);
+            
+            // Expected: x += 1, y += 0, z += -1
+            expectClose(atoms[0].x, 1.0);
+            expectClose(atoms[0].y, 0.0);
+            expectClose(atoms[0].z, -1.0);
+        });
+
+        test("Compact format [-111] - first negative, others positive", () => {
+            const input = "C 0.0 0.0 0.0";
+            const result = steerXYZ(input, "1", Math.sqrt(3), "[-111]"); // norm = sqrt((-1)^2 + 1^2 + 1^2) = sqrt(3)
+            const atoms = parseXYZResult(result);
+            
+            // Expected: x += -1, y += 1, z += 1
+            expectClose(atoms[0].x, -1.0);
+            expectClose(atoms[0].y, 1.0);
+            expectClose(atoms[0].z, 1.0);
+        });
+
+        test("Compact format [1-11] - middle component negative", () => {
+            const input = "C 0.0 0.0 0.0";
+            const result = steerXYZ(input, "1", Math.sqrt(3), "[1-11]"); // norm = sqrt(1^2 + (-1)^2 + 1^2) = sqrt(3)
+            const atoms = parseXYZResult(result);
+            
+            // Expected: x += 1, y += -1, z += 1
+            expectClose(atoms[0].x, 1.0);
+            expectClose(atoms[0].y, -1.0);
+            expectClose(atoms[0].z, 1.0);
+        });
+
+        test("Compact format [11-1] - last component negative", () => {
+            const input = "C 0.0 0.0 0.0";
+            const result = steerXYZ(input, "1", Math.sqrt(3), "[11-1]"); // norm = sqrt(1^2 + 1^2 + (-1)^2) = sqrt(3)
+            const atoms = parseXYZResult(result);
+            
+            // Expected: x += 1, y += 1, z += -1
+            expectClose(atoms[0].x, 1.0);
+            expectClose(atoms[0].y, 1.0);
+            expectClose(atoms[0].z, -1.0);
+        });
+
+        test("Invalid format with non-numeric characters throws error", () => {
+            const input = "C 0.0 0.0 0.0";
+            expect(() => {
+                steerXYZ(input, "1", 0.1, "[abc]");
+            }).toThrow("Invalid HKL format '[abc]': Expected exactly 3 components, got 1 from parsed tokens [abc]");
+        });
+
+        test("Invalid format with mixed alphanumeric throws error", () => {
+            const input = "C 0.0 0.0 0.0";
+            expect(() => {
+                steerXYZ(input, "1", 0.1, "[1a2]");
+            }).toThrow("Invalid HKL format '[1a2]': Expected exactly 3 components, got 1 from parsed tokens [1a2]");
+        });
+
+        test("Invalid format shows expected formats in error", () => {
+            const input = "C 0.0 0.0 0.0";
+            expect(() => {
+                steerXYZ(input, "1", 0.1, "[1x]");
+            }).toThrow("Supported formats: '[1 1 0]', '[1,1,0]', '[110]', '1 1 0', etc.");
+        });
+    });
+
+    describe("Enhanced Error Messages", () => {
+        test("Improved error message for wrong component count", () => {
+            const input = "C 0.0 0.0 0.0";
+            expect(() => {
+                steerXYZ(input, "1", 0.1, "[1 0]");
+            }).toThrow(
+                `Invalid HKL format '[1 0]': Expected exactly 3 components, ` +
+                `got 2 from parsed tokens [1, 0]. Supported formats: '[1 1 0]', '[1,1,0]', '[110]', '1 1 0', etc.`);
+        });
+
+        test("Improved error message for invalid component", () => {
+            const input = "C 0.0 0.0 0.0";
+            expect(() => {
+                steerXYZ(input, "1", 0.1, "[1 x 0]");
+            }).toThrow("Invalid HKL format '[1 x 0]': Component 'x' at position 2 is not a valid integer");
+        });
+
+        test("Improved error message for zero vector", () => {
+            const input = "C 0.0 0.0 0.0";
+            expect(() => {
+                steerXYZ(input, "1", 0.1, "[0,0,0]");
+            }).toThrow("Invalid HKL format '[0,0,0]': Direction cannot be zero vector [0,0,0]");
         });
     });
 });

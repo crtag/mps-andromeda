@@ -22,6 +22,7 @@ describe("Molecule Parser Tests", () => {
             const result = extractMoleculeInput(successTestFileContent);
             expect(result).toEqual({
                 totalAtomNumber: 31,
+                numberElectrons: null,
                 numberAlphaElectrons: 62,
                 numberBetaElectrons: 61,
             });
@@ -31,6 +32,7 @@ describe("Molecule Parser Tests", () => {
             const result = extractMoleculeInput("invalid content");
             expect(result).toEqual({
                 totalAtomNumber: null,
+                numberElectrons: null,
                 numberAlphaElectrons: null,
                 numberBetaElectrons: null,
             });
@@ -40,6 +42,7 @@ describe("Molecule Parser Tests", () => {
             const result = extractMoleculeInput("");
             expect(result).toEqual({
                 totalAtomNumber: null,
+                numberElectrons: null,
                 numberAlphaElectrons: null,
                 numberBetaElectrons: null,
             });

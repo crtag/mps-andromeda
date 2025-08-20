@@ -147,9 +147,68 @@ function extractSimulationResults(content) {
 }
 
 /**
+ * Parse compact HKL format without separators (e.g., "01-1", "011", "10-1").
+ *
+ * @param {string} compactStr - Compact HKL string like "01-1" or "011"
+ * @return {string[]} Array of 3 component strings
+ */
+function parseCompactHKL(compactStr) {
+    // Only attempt compact parsing if the string doesn't contain whitespace or commas
+    if (compactStr.includes(' ') || compactStr.includes(',')) {
+        throw new Error(`Invalid format: cannot parse as compact HKL due to separators`);
+    }
+    
+    const components = [];
+    let current = "";
+    let expectingDigit = true;
+    
+    for (let i = 0; i < compactStr.length; i++) {
+        const char = compactStr[i];
+        
+        if (char === '-') {
+            if (current && !expectingDigit) {
+                // End current component and start new negative component
+                components.push(current);
+                current = "-";
+                expectingDigit = true;
+            } else if (expectingDigit) {
+                // Start of negative component
+                current += "-";
+                expectingDigit = true;
+            } else {
+                // Invalid: minus in middle of number
+                throw new Error(`Invalid compact HKL format: unexpected '-' at position ${i + 1}`);
+            }
+        } else if (char >= '0' && char <= '9') {
+            current += char;
+            expectingDigit = false;
+        } else {
+            // Invalid character
+            throw new Error(`Invalid compact HKL format: unexpected character '${char}' at position ${i + 1}`);
+        }
+        
+        // Auto-split after each digit group for common patterns
+        if (!expectingDigit && (i === compactStr.length - 1 || compactStr[i + 1] === '-' || 
+            (current.length === 1 && char !== '-') || 
+            (current.length === 2 && current[0] === '-'))) {
+            components.push(current);
+            current = "";
+            expectingDigit = true;
+        }
+    }
+    
+    // Add final component if exists
+    if (current) {
+        components.push(current);
+    }
+    
+    return components;
+}
+
+/**
  * Parse HKL Miller indices string to unit vector.
  *
- * @param {string} hklStr - Miller indices like "[1 1 0]", "10-1", "[2,0,-1]"
+ * @param {string} hklStr - Miller indices like "[1 1 0]", "10-1", "[2,0,-1]", "[01-1]", "[011]"
  * @return {number[]} Unit vector [ux, uy, uz]
  */
 function parseHKLToUnitVector(hklStr) {
@@ -158,18 +217,34 @@ function parseHKLToUnitVector(hklStr) {
     // Strip optional square brackets
     const withoutBrackets = trimmed.replace(/^\[|\]$/g, "");
 
-    // Split by commas or whitespace, ignoring empty pieces
-    const tokens = withoutBrackets.split(/[,\s]+/).filter(token => token.length > 0);
+    // First try: Split by commas or whitespace (modern format)
+    let tokens = withoutBrackets.split(/[,\s]+/).filter(token => token.length > 0);
+
+    // If we don't get exactly 3 tokens, try compact format parsing
+    if (tokens.length !== 3) {
+        try {
+            tokens = parseCompactHKL(withoutBrackets);
+        } catch (error) {
+            // If compact parsing also fails, fall through to the main error with original tokens
+            console.error("Compact parsing failed:", error);
+        }
+    }
 
     if (tokens.length !== 3) {
-        throw new Error(`Expected exactly 3 HKL components, got ${tokens.length}`);
+        throw new Error(
+            `Invalid HKL format '${hklStr}': Expected exactly 3 components, ` +
+            `got ${tokens.length} from parsed tokens [${tokens.join(', ')}]. ` +
+            `Supported formats: '[1 1 0]', '[1,1,0]', '[110]', '1 1 0', etc.`);
     }
 
     // Parse each token as integer
-    const components = tokens.map(token => {
+    const components = tokens.map((token, index) => {
         const num = parseInt(token, 10);
         if (!Number.isInteger(num)) {
-            throw new Error(`Invalid HKL component "${token}": must be integer`);
+            throw new Error(
+                `Invalid HKL format '${hklStr}': Component '${token}' at position ${index + 1} ` +
+                `is not a valid integer`
+            );
         }
         return num;
     });
@@ -178,7 +253,7 @@ function parseHKLToUnitVector(hklStr) {
 
     // Validate not all zero
     if (h === 0 && k === 0 && l === 0) {
-        throw new Error("HKL direction cannot be zero vector [0,0,0]");
+        throw new Error(`Invalid HKL format '${hklStr}': Direction cannot be zero vector [0,0,0]`);
     }
 
     // Compute Euclidean norm
