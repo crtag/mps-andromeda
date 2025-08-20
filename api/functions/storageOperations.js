@@ -122,14 +122,14 @@ async function getJobFile(filename, type) {
         // the type dictates the prefix, two options are "spec" and "result"
 
         switch (type) {
-        case "spec":
-            fullPath = `${JOBS_PREFIX}${filename}`;
-            break;
-        case "result":
-            fullPath = `${RESULTS_PREFIX}${filename}`;
-            break;
-        default:
-            throw new Error("Invalid file type");
+            case "spec":
+                fullPath = `${JOBS_PREFIX}${filename}`;
+                break;
+            case "result":
+                fullPath = `${RESULTS_PREFIX}${filename}`;
+                break;
+            default:
+                throw new Error("Invalid file type");
         }
 
         const file = getBucket().file(fullPath);

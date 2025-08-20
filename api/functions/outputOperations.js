@@ -147,56 +147,193 @@ function extractSimulationResults(content) {
 }
 
 /**
+ * Parse HKL Miller indices string to unit vector.
+ *
+ * @param {string} hklStr - Miller indices like "[1 1 0]", "10-1", "[2,0,-1]"
+ * @return {number[]} Unit vector [ux, uy, uz]
+ */
+function parseHKLToUnitVector(hklStr) {
+    const trimmed = hklStr.trim();
+
+    // Strip optional square brackets
+    const withoutBrackets = trimmed.replace(/^\[|\]$/g, "");
+
+    // Split by commas or whitespace, ignoring empty pieces
+    const tokens = withoutBrackets.split(/[,\s]+/).filter(token => token.length > 0);
+
+    if (tokens.length !== 3) {
+        throw new Error(`Expected exactly 3 HKL components, got ${tokens.length}`);
+    }
+
+    // Parse each token as integer
+    const components = tokens.map(token => {
+        const num = parseInt(token, 10);
+        if (!Number.isInteger(num)) {
+            throw new Error(`Invalid HKL component "${token}": must be integer`);
+        }
+        return num;
+    });
+
+    const [h, k, l] = components;
+
+    // Validate not all zero
+    if (h === 0 && k === 0 && l === 0) {
+        throw new Error("HKL direction cannot be zero vector [0,0,0]");
+    }
+
+    // Compute Euclidean norm
+    const norm = Math.sqrt(h * h + k * k + l * l);
+
+    // Return unit vector
+    return [h / norm, k / norm, l / norm];
+}
+
+/**
+ * Parse steered atoms selection string to array of indices.
+ *
+ * @param {string} selectionStr - Atom indices like "1 2 3" or "1,2,3"
+ * @param {number} atomCount - Total number of atoms for bounds checking
+ * @return {number[]} Array of one-based atom indices (deduplicated)
+ */
+function parseSteeredAtoms(selectionStr, atomCount) {
+    // Split on non-digits and filter out empties
+    const tokens = selectionStr.split(/\D+/).filter(token => token.length > 0);
+
+    if (tokens.length === 0) {
+        throw new Error("No atom indices found in selection string");
+    }
+
+    // Map to integers and validate
+    const indices = tokens.map(token => {
+        const num = parseInt(token, 10);
+        if (!Number.isInteger(num)) {
+            throw new Error(`Invalid atom index "${token}": must be integer`);
+        }
+        return num;
+    });
+
+    // De-duplicate while preserving order
+    const uniqueIndices = [...new Set(indices)];
+
+    // Range check: 1-based indexing
+    for (const index of uniqueIndices) {
+        if (index < 1 || index > atomCount) {
+            throw new Error(`Atom index ${index} out of bounds. Expected in range 1 to ${atomCount}`);
+        }
+    }
+
+    return uniqueIndices;
+}
+
+/**
+ * Parse XYZ coordinate lines into structured records.
+ *
+ * @param {string} xyzStr - XYZ format lines "Type x y z"
+ * @return {Array<{type: string, x: number, y: number, z: number}>} Parsed records
+ */
+function parseXYZ(xyzStr) {
+    const lines = xyzStr.split("\n")
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
+
+    const records = [];
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const tokens = line.split(/\s+/);
+
+        if (tokens.length !== 4) {
+            throw new Error(`Line ${i + 1}: Expected 4 tokens (type x y z), got ${tokens.length}`);
+        }
+
+        const [type, xStr, yStr, zStr] = tokens;
+
+        const x = parseFloat(xStr);
+        const y = parseFloat(yStr);
+        const z = parseFloat(zStr);
+
+        if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+            throw new Error(`Line ${i + 1}: Invalid coordinates - must be finite numbers`);
+        }
+
+        records.push({type, x, y, z});
+    }
+
+    return records;
+}
+
+/**
+ * Format XYZ records back to string format.
+ *
+ * @param {Array<{type: string, x: number, y: number, z: number}>} records - XYZ records
+ * @return {string} Formatted XYZ string
+ */
+function formatXYZ(records) {
+    return records.map(record => 
+        `${record.type} ${record.x} ${record.y} ${record.z}`
+    ).join("\n");
+}
+
+/**
+ * Apply steering displacement to selected atoms.
+ *
+ * @param {Array<{type: string, x: number, y: number, z: number}>} records - XYZ records
+ * @param {number[]} selectedIndices - One-based atom indices to steer
+ * @param {number} stepSize - Total displacement magnitude in Angstroms
+ * @param {number[]} unitDir - Unit direction vector [ux, uy, uz]
+ * @return {Array<{type: string, x: number, y: number, z: number}>} New records with applied steering
+ */
+function applySteer(records, selectedIndices, stepSize, unitDir) {
+    if (!Number.isFinite(stepSize) || stepSize === 0) {
+        throw new Error("stepSize must be a finite non-zero number");
+    }
+
+    const [ux, uy, uz] = unitDir;
+
+    // Compute per-axis deltas
+    const dx = stepSize * ux;
+    const dy = stepSize * uy;
+    const dz = stepSize * uz;
+
+    // Create new records array (don't mutate input)
+    const newRecords = [...records];
+
+    // Apply steering to selected atoms
+    for (const oneBasedIndex of selectedIndices) {
+        const zeroBasedIndex = oneBasedIndex - 1;
+        const record = newRecords[zeroBasedIndex];
+
+        // Create new record with steered coordinates
+        newRecords[zeroBasedIndex] = {
+            type: record.type,
+            x: record.x + dx,
+            y: record.y + dy,
+            z: record.z + dz,
+        };
+    }
+
+    return newRecords;
+}
+
+/**
  * Steer the XYZ coordinates of atoms in the given direction.
  *
- * @param {string} currentXYZ - The current all atoms XYZ format, one line per atom.
- * Type of atom, then X, Y, Z coordinates, all space-separated.
- * @param {string} steeredAtoms - The indices of the atoms to steer. Once-based list.
- * @param {number} stepSize - The step size to steer the atoms. In angstroms.
- * @param {string} hkl - The direction to steer the atoms. Miller indices in square brackets.
- * @return {string} The new XYZ formatted list.
+ * Applies a displacement of magnitude stepSize along the Miller indices direction
+ * to the specified atoms. The stepSize represents the total displacement length,
+ * making diagonal movements physically consistent.
+ *
+ * @param {string} currentXYZ - XYZ format coordinates, one line per atom (Type x y z)
+ * @param {string} steeredAtoms - One-based atom indices, space or comma separated
+ * @param {number} stepSize - Total displacement magnitude in Angstroms (negative allowed for reverse)
+ * @param {string} hkl - Miller indices direction like "[1 1 0]" or "2,0,-1"
+ * @return {string} Updated XYZ coordinate string
  */
 function steerXYZ(currentXYZ, steeredAtoms, stepSize, hkl) {
-    // parse the direction string to get the vector, square brackets are optional
-    // either of h k l can have a minus indicating the opposite direction
-    const directionMatch = hkl.match(/^\[?([01-]+)\]?$/);
-    if (!directionMatch) {
-        throw new Error("Invalid direction format case 1, must match [hkl] with optional minus sign");
-    }
-    // find the minus sign and extract it
-    const sign = directionMatch[1].indexOf("-") !== -1 ? -1 : 1;
-    let direction = directionMatch[1].replace("-", "");
-    // figure out direction by position of h, k, l in the string
-    // we actually need only an index to use it to reference X Y or Z in the atom line
-    // so we can use a simple switch statement
-    direction = direction.indexOf("1");
-    // if the direction is not found, it means the direction is not valid
-    if (direction === -1) {
-        throw new Error("Invalid direction format case 2, must match [hkl] with optional minus sign");
-    }
-
-    // split the atom list with coordinates into lines
-    const xyzLines = currentXYZ.trim().split("\n");
-
-    // split the list of atoms to steer into an array of integers, separator can be
-    // anything that is not a digit
-    const atoms = steeredAtoms.split(/\D+/).map((i) => parseInt(i));
-
-    // steer the atoms, mind zero based lines list
-    for (const atom of atoms) {
-        const line = xyzLines[atom - 1];
-        if (!line) {
-            throw new Error(`Atom index ${atom} out of bounds. Expected in 1 to ${xyzLines.length} range.`);
-        }
-        const currentPos = line.split(/\s+/);
-        // we need to add the step size to the current position
-        currentPos[direction + 1] = parseFloat(currentPos[direction + 1].trim()) + sign * stepSize;
-
-        // unfold back into string line
-        xyzLines[atom - 1] = currentPos.join("    ");
-    }
-
-    return xyzLines.join("\n");
+    const records = parseXYZ(currentXYZ);
+    const unitDir = parseHKLToUnitVector(hkl);
+    const selected = parseSteeredAtoms(steeredAtoms, records.length);
+    const newRecords = applySteer(records, selected, stepSize, unitDir);
+    return formatXYZ(newRecords);
 }
 
 module.exports = {extractSection, extractReverse, extractMoleculeInput, extractSimulationResults, steerXYZ};
