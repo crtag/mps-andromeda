@@ -143,6 +143,11 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
         // extract the first line of the file to use as the job spec in metadata
         const jobSpec = content.split("\n")[0];
 
+        // extract multiplicity setting from the job spec, default is 1
+        // the string in QUICK job spec is `MULT=N` where N to be extracted
+        const multMatch = jobSpec.match(/MULT=(\d+)/);
+        const multiplicity = multMatch ? parseInt(multMatch[1]) : 1;
+
         // detect Trajectory Simulation job type
         const isTrajectoryJob = req.body.direction && req.body.stepSize && req.body.numSteps && req.body.steeredAtoms;
 
@@ -151,6 +156,7 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
             status: "PENDING",
             submitTime: new Date().toISOString(),
             jobSpec,
+            multiplicity,
         };
 
         const metadata = isTrajectoryJob ? {
