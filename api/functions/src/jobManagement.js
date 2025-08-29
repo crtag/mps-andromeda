@@ -157,6 +157,7 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
             submitTime: new Date().toISOString(),
             jobSpec,
             multiplicity,
+            description: req.body.description || ""
         };
 
         const metadata = isTrajectoryJob ? {
