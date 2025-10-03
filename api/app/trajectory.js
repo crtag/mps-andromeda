@@ -12,7 +12,8 @@ const elements = {
     directionInputs: document.getElementsByName('direction'),
     stepSizeInput: document.getElementById('step-size'),
     stepsInput: document.getElementById('steps-num'),
-    steeredAtomsInput: document.getElementById('steered-atoms')
+    steeredAtomsInput: document.getElementById('steered-atoms'),
+    descriptionInput: document.getElementById('description'),
 };
 
 let jobFile = null;
@@ -104,6 +105,7 @@ async function handleSubmit(e) {
             stepSize: parseFloat(elements.stepSizeInput.value),
             numSteps: parseInt(elements.stepsInput.value, 10),
             steeredAtoms: elements.steeredAtomsInput.value.trim(),
+            description: elements.descriptionInput.value.trim(),
         };
 
         console.log('Prepared job data:');
