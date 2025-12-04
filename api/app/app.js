@@ -11,16 +11,42 @@ const firebaseConfig = {
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
+const storage = firebase.storage();
+const functions = firebase.functions();
 
 // Constants
+const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const EMULATOR_BASE = 'http://localhost:5001/mps-andromeda/us-central1';
+
+// Connect to emulators if running locally
+if (IS_LOCAL) {
+    console.log('Running locally - connecting to Firebase emulators...');
+    functions.useEmulator('localhost', 5001);
+    storage.useEmulator('localhost', 9199);
+    console.log('Connected to Functions emulator on localhost:5001');
+    console.log('Connected to Storage emulator on localhost:9199');
+} else {
+    console.log('Running in production mode');
+}
+
 const API = {
-    UPLOAD: 'https://uploadjobspec-poloq3qrtq-uc.a.run.app',
+    UPLOAD: IS_LOCAL
+        ? `${EMULATOR_BASE}/uploadJobSpec`
+        : 'https://uploadjobspec-poloq3qrtq-uc.a.run.app',
     JOBS: {
-        PENDING_RUNNING: 'https://listpendingjobs-poloq3qrtq-uc.a.run.app',
-        COMPLETED: 'https://listcompletedjobs-poloq3qrtq-uc.a.run.app'
+        PENDING_RUNNING: IS_LOCAL
+            ? `${EMULATOR_BASE}/listPendingJobs`
+            : 'https://listpendingjobs-poloq3qrtq-uc.a.run.app',
+        COMPLETED: IS_LOCAL
+            ? `${EMULATOR_BASE}/listCompletedJobs`
+            : 'https://listcompletedjobs-poloq3qrtq-uc.a.run.app'
     },
-    FILE: 'https://getjobfile-poloq3qrtq-uc.a.run.app'
+    FILE: IS_LOCAL
+        ? `${EMULATOR_BASE}/getJobFile`
+        : 'https://getjobfile-poloq3qrtq-uc.a.run.app'
 };
+
+console.log('API URLs configured:', API);
 
 const REFRESH_INTERVAL = 300000; // 300 seconds
 const COMPLETED_JOBS_LIMIT = 75;
