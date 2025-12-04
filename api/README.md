@@ -37,13 +37,7 @@ This command will:
 
 **First run setup:**
 
-On first run, initialize the storage folder structure:
-```bash
-cd functions/
-npm run init-storage
-```
-
-This creates the required directories:
+On first run, initialize the storage folder structure to create the required directories:
 - `job-specs/`
 - `job-results/`
 - `job-trajectories/`
