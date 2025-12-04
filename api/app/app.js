@@ -1,3 +1,17 @@
+// Firebase Configuration
+const firebaseConfig = {
+    apiKey: "AIzaSyCDqqYmJkRvm0nnDCSyw1YQGYeyj__YF68",
+    authDomain: "mps-andromeda.firebaseapp.com",
+    projectId: "mps-andromeda",
+    storageBucket: "mps-andromeda.appspot.com",
+    messagingSenderId: "691275468466",
+    appId: "1:691275468466:web:67237ada893bfa8cde83ab"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+
 // Constants
 const API = {
     UPLOAD: 'https://uploadjobspec-poloq3qrtq-uc.a.run.app',
@@ -264,12 +278,194 @@ function startPolling() {
     setInterval(fetchJobs, REFRESH_INTERVAL);
 }
 
+// Authentication Functions
+function showAuthError(message) {
+    const errorElement = document.getElementById('auth-error');
+    errorElement.textContent = message;
+}
+
+function clearAuthError() {
+    const errorElement = document.getElementById('auth-error');
+    errorElement.textContent = '';
+}
+
+function showResetMessage(message, isSuccess) {
+    const messageElement = document.getElementById('reset-message');
+    messageElement.textContent = message;
+    messageElement.className = 'reset-message ' + (isSuccess ? 'success' : 'error');
+}
+
+function clearResetMessage() {
+    const messageElement = document.getElementById('reset-message');
+    messageElement.textContent = '';
+    messageElement.className = 'reset-message';
+}
+
+function showResetModal() {
+    document.getElementById('reset-modal').style.display = 'flex';
+    document.getElementById('reset-email').value = '';
+    clearResetMessage();
+}
+
+function hideResetModal() {
+    document.getElementById('reset-modal').style.display = 'none';
+}
+
+async function handlePasswordReset(email) {
+    const resetBtn = document.getElementById('reset-btn');
+    try {
+        resetBtn.disabled = true;
+        resetBtn.textContent = 'Sending...';
+        clearResetMessage();
+
+        // Configure action code settings to redirect back to the app
+        const actionCodeSettings = {
+            url: window.location.origin, // Redirect back to your app after reset
+            handleCodeInApp: false
+        };
+
+        await auth.sendPasswordResetEmail(email, actionCodeSettings);
+
+        showResetMessage('Password reset link sent! Check your email.', true);
+        resetBtn.textContent = 'Send Reset Link';
+
+        // Close modal after 2 seconds
+        setTimeout(() => {
+            hideResetModal();
+            resetBtn.disabled = false;
+        }, 2000);
+    } catch (error) {
+        console.error('Password reset error:', error);
+        let errorMessage = 'Failed to send reset email. Please try again.';
+
+        if (error.code === 'auth/invalid-email') {
+            errorMessage = 'Invalid email address.';
+        } else if (error.code === 'auth/user-not-found') {
+            errorMessage = 'No account found with this email.';
+        }
+
+        showResetMessage(errorMessage, false);
+        resetBtn.disabled = false;
+        resetBtn.textContent = 'Send Reset Link';
+    }
+}
+
+async function handleLogin(email, password) {
+    const loginBtn = document.getElementById('login-btn');
+    try {
+        loginBtn.disabled = true;
+        loginBtn.textContent = 'Signing in...';
+        clearAuthError();
+
+        await auth.signInWithEmailAndPassword(email, password);
+        // User signed in - onAuthStateChanged will handle UI updates
+    } catch (error) {
+        console.error('Login error:', error);
+        let errorMessage = 'Failed to sign in. Please try again.';
+
+        if (error.code === 'auth/invalid-email') {
+            errorMessage = 'Invalid email address.';
+        } else if (error.code === 'auth/user-not-found') {
+            errorMessage = 'No account found with this email.';
+        } else if (error.code === 'auth/wrong-password') {
+            errorMessage = 'Incorrect password.';
+        } else if (error.code === 'auth/invalid-credential') {
+            errorMessage = 'Invalid email or password.';
+        }
+
+        showAuthError(errorMessage);
+        loginBtn.disabled = false;
+        loginBtn.textContent = 'Sign In';
+    }
+}
+
+async function handleSignOut() {
+    try {
+        await auth.signOut();
+        // onAuthStateChanged will handle UI updates
+    } catch (error) {
+        console.error('Sign out error:', error);
+        alert('Failed to sign out. Please try again.');
+    }
+}
+
+function showAuthUI() {
+    document.getElementById('auth-container').style.display = 'flex';
+    document.querySelector('main').style.display = 'none';
+
+    // Reset login form state
+    const loginBtn = document.getElementById('login-btn');
+    loginBtn.disabled = false;
+    loginBtn.textContent = 'Sign In';
+    document.getElementById('login-form').reset();
+    clearAuthError();
+}
+
+function showAppUI(user) {
+    document.getElementById('auth-container').style.display = 'none';
+    document.querySelector('main').style.display = 'block';
+    document.getElementById('user-email').textContent = user.email;
+}
+
+// Authentication State Observer
+auth.onAuthStateChanged((user) => {
+    if (user) {
+        // User is signed in
+        console.log('User signed in:', user.email);
+        showAppUI(user);
+
+        // Initialize app only when authenticated
+        if (!window.appInitialized) {
+            initializeUpload();
+            startPolling();
+            elements.completedJobsSubtitle.textContent = `(last ${COMPLETED_JOBS_LIMIT} only)`;
+            window.appInitialized = true;
+        }
+    } else {
+        // User is signed out
+        console.log('User signed out');
+        showAuthUI();
+        window.appInitialized = false;
+    }
+});
+
 // document onload event handler
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialize
-    initializeUpload();
-    startPolling();
+    // Set up login form handler
+    document.getElementById('login-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        handleLogin(email, password);
+    });
 
-    // add content to completed jobs subtitle
-    elements.completedJobsSubtitle.textContent = `(last ${COMPLETED_JOBS_LIMIT} only)`;
+    // Set up sign out button handler
+    document.getElementById('signout-btn').addEventListener('click', handleSignOut);
+
+    // Set up forgot password link handler
+    document.getElementById('forgot-password-link').addEventListener('click', (e) => {
+        e.preventDefault();
+        showResetModal();
+    });
+
+    // Set up password reset form handler
+    document.getElementById('reset-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const email = document.getElementById('reset-email').value;
+        handlePasswordReset(email);
+    });
+
+    // Set up cancel reset button handler
+    document.getElementById('cancel-reset-btn').addEventListener('click', () => {
+        hideResetModal();
+    });
+
+    // Close modal when clicking outside
+    document.getElementById('reset-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'reset-modal') {
+            hideResetModal();
+        }
+    });
+
+    // Auth state will be handled by onAuthStateChanged
 });

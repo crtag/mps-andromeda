@@ -26,6 +26,9 @@
       "port": 9199,
       "rules": "storage.rules"
     },
+    "hosting": {
+      "port": 5000
+    },
     "ui": {
       "enabled": true
     },
