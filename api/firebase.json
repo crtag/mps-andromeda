@@ -32,10 +32,7 @@
     "ui": {
       "enabled": true
     },
-    "singleProjectMode": true,
-    "export": {
-      "path": "./emulator-data"
-    }
+    "singleProjectMode": true
   },
   "hosting": {
     "public": "app",

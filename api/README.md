@@ -21,38 +21,43 @@ Functions require dependencies, install them
 
 ## Running emulators
 
-You can run all emulators with:
+**Start emulators with data persistence:**
 ```bash
-firebase emulators:start --only functions,storage,hosting
+firebase emulators:start --only functions,storage,hosting --import=./emulator-data --export-on-exit=./emulator-data
 ```
 
-Or run specific emulators:
+This command will:
+- Import existing data from `./emulator-data/` on startup (if it exists)
+- Export all data to `./emulator-data/` when you stop the emulator (Ctrl+C)
+
+**Run specific emulators:**
 - Functions only: `firebase emulators:start --only functions`
 - Hosting only: `firebase emulators:start --only hosting`
 - Storage only: `firebase emulators:start --only storage`
 
-On a first run you will need to create some initial storage structure, at least the following folders via local emulator UI:
-    'job-specs',
-    'job-results',
-    'job-trajectories'
+**First run setup:**
+
+On first run, initialize the storage folder structure:
+```bash
+cd functions/
+npm run init-storage
+```
+
+This creates the required directories:
+- `job-specs/`
+- `job-results/`
+- `job-trajectories/`
 
 ### Emulator data persistence
 
-Emulator data (storage files, etc.) is automatically saved to `./emulator-data/` on exit and loaded on start. This allows you to maintain state between emulator sessions.
-
-To manually export data:
-```bash
-firebase emulators:export ./emulator-data
-```
-
-To start with imported data:
-```bash
-firebase emulators:start --import=./emulator-data
-```
-
-To clear emulator data:
+**Clear emulator data** (start fresh):
 ```bash
 rm -rf ./emulator-data
+```
+
+**Manual export** (while emulator is running):
+```bash
+firebase emulators:export ./emulator-data
 ```
 
 ### Local vs Production
