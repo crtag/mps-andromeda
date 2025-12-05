@@ -23,8 +23,10 @@ Functions require dependencies, install them
 
 **Start emulators with data persistence:**
 ```bash
-firebase emulators:start --only functions,storage,hosting --import=./emulator-data --export-on-exit=./emulator-data
+TMPDIR=$HOME/.firebase-tmp firebase emulators:start --only functions,storage,hosting --import=./emulator-data --export-on-exit=./emulator-data
 ```
+
+This sets a user-specific temp directory to avoid conflicts on shared machines.
 
 This command will:
 - Import existing data from `./emulator-data/` on startup (if it exists)

@@ -4,3 +4,7 @@ website-docs
 *.out*
 **/manifests/secrets.yaml
 **/manifests/*.json
+
+# Agent tracking files
+@agent_current_task.txt
+@agent_memory.txt
