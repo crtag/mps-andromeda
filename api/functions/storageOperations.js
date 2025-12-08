@@ -25,15 +25,13 @@ async function listFilesWithQuery(prefix, matchGlob) {
 
 async function listPendingJobs() {
     try {
-        // Look for both .in files (legacy) and .xyz files (new folder structure)
+        // Look for .xyz files (new folder structure)
         // Exclude .cfg files - they are not job files
-        const inFiles = await listFilesWithQuery(JOBS_PREFIX, "**.in");
         const xyzFiles = await listFilesWithQuery(JOBS_PREFIX, "**.xyz");
-        const allFiles = [...inFiles, ...xyzFiles];
+        // Filter to ensure only .xyz files (Firebase Storage glob may incorrectly match)
+        const files = xyzFiles.filter(f => f.name.endsWith('.xyz'));
 
-        const jobPromises = allFiles
-            .filter((file) => file.exists())
-            .map(async (file) => {
+        const jobPromises = files.map(async (file) => {
                 const [metadata] = await file.getMetadata();
                 // Extract folder name if file is in a folder (e.g., job-specs/job_20241201120001/molecule.xyz)
                 const relativePath = file.name.replace(JOBS_PREFIX, "");
@@ -60,21 +58,10 @@ async function listPendingJobs() {
             });
 
         const jobResults = await Promise.all(jobPromises);
-        // Filter out null values (filtered files)
+        // Filter out null values (filtered config files)
         const jobs = jobResults.filter(job => job !== null);
         
-        // Deduplicate jobs by fullPath (same file shouldn't appear twice)
-        const uniqueJobs = [];
-        const seenPaths = new Set();
-        for (const job of jobs) {
-            const key = job.fullPath || `${job.jobFolder || ''}/${job.filename}`;
-            if (!seenPaths.has(key)) {
-                seenPaths.add(key);
-                uniqueJobs.push(job);
-            }
-        }
-        
-        return uniqueJobs.sort((a, b) => new Date(a.submitTime) - new Date(b.submitTime));
+        return jobs.sort((a, b) => new Date(a.submitTime) - new Date(b.submitTime));
     } catch (error) {
         logger.error("Error listing pending jobs", error);
         throw error;

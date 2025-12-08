@@ -325,21 +325,6 @@ async function uploadAllJobs() {
         // Always reset upload flag, even if there's an error
         isUploading = false;
     }
-    
-    // Show summary with individual job messages
-    if (createdJobs.length > 0 && failCount === 0) {
-        const jobMessages = createdJobs.map(job => 
-            `Successfully created draft ${job.jobFolder}/${job.xyzFilename}`
-        ).join('\n');
-        showStatus(jobMessages, 'success');
-    } else if (createdJobs.length > 0 && failCount > 0) {
-        const jobMessages = createdJobs.map(job => 
-            `Successfully created draft ${job.jobFolder}/${job.xyzFilename}`
-        ).join('\n');
-        showStatus(`${jobMessages}\n${failCount} job${failCount > 1 ? 's' : ''} failed`, 'error');
-    } else {
-        showStatus(`Failed to upload ${failCount} job${failCount > 1 ? 's' : ''}`, 'error');
-    }
 }
 
 function resetFileState() {
@@ -400,21 +385,11 @@ async function fetchJobs() {
         if (!pendingResponse.ok) throw new Error('Failed to fetch pending/running jobs');
         const activeJobs = await pendingResponse.json();
         
-        // Deduplicate jobs by fullPath or jobFolder+filename
-        const uniqueJobs = [];
-        const seenKeys = new Set();
-        for (const job of activeJobs) {
-            const key = job.fullPath || `${job.jobFolder || ''}/${job.filename}`;
-            if (!seenKeys.has(key)) {
-                seenKeys.add(key);
-                uniqueJobs.push(job);
-            }
-        }
-        
+        // Backend already deduplicates jobs, so we can use them directly
         // Separate jobs by status
-        const drafts = uniqueJobs.filter(job => job.status === 'DRAFT');
-        const pending = uniqueJobs.filter(job => job.status === 'PENDING');
-        const running = uniqueJobs.filter(job => job.status === 'RUNNING');
+        const drafts = activeJobs.filter(job => job.status === 'DRAFT');
+        const pending = activeJobs.filter(job => job.status === 'PENDING');
+        const running = activeJobs.filter(job => job.status === 'RUNNING');
         
         updateJobsList('draft-jobs', drafts, false, true);
         updateJobsList('pending-jobs', pending);
@@ -477,13 +452,8 @@ window.confirmJob = confirmJob;
 const deletingJobs = new Set();
 
 async function deleteJob(jobFolder, filename, skipConfirmation = false) {
-    // Handle null string from onclick handlers
-    if (jobFolder === 'null' || jobFolder === null) {
-        jobFolder = null;
-    }
-    
-    const displayPath = jobFolder ? `${jobFolder}/${filename}` : filename;
-    const jobKey = jobFolder ? `${jobFolder}/${filename}` : filename;
+    const displayPath = `${jobFolder}/${filename}`;
+    const jobKey = `${jobFolder}/${filename}`;
     
     if (deletingJobs.has(jobKey)) {
         return;
@@ -503,7 +473,7 @@ async function deleteJob(jobFolder, filename, skipConfirmation = false) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                jobFolder: jobFolder || null,
+                jobFolder: jobFolder,
                 filename: filename
             })
         });
@@ -586,21 +556,21 @@ function updateJobsList(sectionId, jobs, isCompleted = false, isDraft = false) {
 
                 ${isDraft ? `
                 <div class="job-actions">
-                    <button class="btn-confirm" onclick="confirmJob(${job.jobFolder ? `'${job.jobFolder}'` : 'null'}, '${job.filename}')">Confirm</button>
-                    <button class="btn-delete" onclick="cancelJob(${job.jobFolder ? `'${job.jobFolder}'` : 'null'}, '${job.filename}')">Cancel</button>
+                    <button class="btn-confirm" onclick='confirmJob(${JSON.stringify(job.jobFolder)}, ${JSON.stringify(job.filename)})'>Confirm</button>
+                    <button class="btn-delete" onclick='cancelJob(${JSON.stringify(job.jobFolder)}, ${JSON.stringify(job.filename)})'>Cancel</button>
                 </div>
                 ` : ''}
                 
                 ${!isCompleted && !isDraft && job.status === 'PENDING' ? `
                 <div class="job-actions">
-                    <button class="btn-delete" onclick="deleteJob(${job.jobFolder ? `'${job.jobFolder}'` : 'null'}, '${job.filename}')">Delete</button>
+                    <button class="btn-delete" onclick='deleteJob(${JSON.stringify(job.jobFolder)}, ${JSON.stringify(job.filename)})'>Delete</button>
                 </div>
                 ` : ''}
 
                 ${job?.jobSpec ? 
                     `<div class="job-spec">${job.jobSpec}
                         ${isCompleted ? `
-                            <button title="Copy to clipboard: \n${job.filename}, ${job.jobSpec.trim()}, ${job?.totalAtomNumber || ''}, ${job?.numberElectrons || ''}, ${job?.numberAlphaElectrons || ''}, ${job?.numberBetaElectrons || ''}, ${job?.minimizedEnergy || ''}, ${job?.totalTime || ''}" class="btn-clipboard" onclick="(async () => await navigator.clipboard.writeText(\`${job.filename}, ${job.jobSpec.trim()}, ${job?.totalAtomNumber || ''}, ${job?.numberElectrons || ''}, ${job?.numberAlphaElectrons || ''}, ${job?.numberBetaElectrons || ''}, ${job?.minimizedEnergy || ''}, ${job?.totalTime || ''}" class="btn-clipboard" onclick="(async () => await navigator.clipboard.writeText(\`${job.filename}, ${job.jobSpec.trim()}, ${job?.totalAtomNumber || ''}, ${job?.numberAlphaElectrons || ''}, ${job?.numberBetaElectrons || ''}, ${job?.minimizedEnergy || ''}, ${job?.totalTime || ''}\`))()">
+                            <button title="Copy to clipboard" class="btn-clipboard" onclick="(async () => await navigator.clipboard.writeText(\`${job.filename}, ${job.jobSpec.trim()}, ${job?.totalAtomNumber || ''}, ${job?.numberElectrons || ''}, ${job?.numberAlphaElectrons || ''}, ${job?.numberBetaElectrons || ''}, ${job?.minimizedEnergy || ''}, ${job?.totalTime || ''}\`))()">
                                 <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAACXBIWXMAAAsTAAALEwEAmpwYAAAALElEQVR4nGNgIAuknfmPF2MArIL4QBpUA9E2pSFpIGTosNEAA2RpICkCiQAAL4ZePPv+G+QAAAAASUVORK5CYII=" alt="copy">
                             </button>
                          `: ''
@@ -621,40 +591,6 @@ function updateJobsList(sectionId, jobs, isCompleted = false, isDraft = false) {
             </div>
         `;
     }).join('');
-}
-
-// API Calls
-async function uploadFiles() {
-    if (!fileState.config || !fileState.xyz) {
-        showStatus('Both config and geometry files are required', 'error');
-        return;
-    }
-
-    try {
-        showStatus('Uploading job...', '');
-        const response = await fetch(API.UPLOAD, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                configFilename: fileState.config.filename,
-                configContent: fileState.config.content,
-                xyzFilename: fileState.xyz.filename,
-                xyzContent: fileState.xyz.content
-            })
-        });
-
-        const data = await response.json();
-        
-        if (!response.ok) throw new Error(data.message || 'Upload failed');
-        
-        showStatus(`Job uploaded successfully: ${data.xyzFilename}`, 'success');
-        resetFileState();
-        fetchJobs();
-    } catch (error) {
-        showStatus(`Error: ${error.message}`, 'error');
-    }
 }
 
 // UI Updates

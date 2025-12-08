@@ -86,37 +86,62 @@ exports.getJobFileHandler = onRequest({cors: true}, async (req, res) => {
     }
 });
 
-// Parse config file to extract worker type and other settings
+// Parse config file to extract settings
 function parseConfigFile(configContent) {
-    const lines = configContent.split("\n").map(line => line.trim()).filter(line => line);
+    const lines = configContent.split("\n").map(line => line.trim());
     
-    let worker = "PySCF"; // default
     const config = {};
     
-    // Basic parsing - extract worker type and other config fields
+    // Parse key-value pairs (key: value or key=value, handles quoted values)
+    // Matches: KEY=value, KEY="quoted value", KEY: value, etc.
     lines.forEach(line => {
-        // Look for worker type (case insensitive, supports WORKER=value or worker: value)
-        const workerMatch = line.match(/worker\s*[:=]\s*(\w+)/i);
-        if (workerMatch) {
-            worker = workerMatch[1];
+        // Skip empty lines and comment lines (starting with #)
+        if (!line || line.startsWith('#')) {
+            return;
         }
         
-        // Look for key-value pairs (key: value or key=value, handles quoted values)
-        // Matches: KEY=value, KEY="quoted value", KEY: value, etc.
         const kvMatch = line.match(/(\w+)\s*[:=]\s*(.+)/);
         if (kvMatch) {
             const key = kvMatch[1].toLowerCase();
             let value = kvMatch[2].trim();
+            
+            // Remove inline comments (everything after # that's not inside quotes)
+            // Handle quoted strings properly
+            let inQuotes = false;
+            let quoteChar = null;
+            let commentIndex = -1;
+            
+            for (let i = 0; i < value.length; i++) {
+                const char = value[i];
+                if ((char === '"' || char === "'") && (i === 0 || value[i - 1] !== '\\')) {
+                    if (!inQuotes) {
+                        inQuotes = true;
+                        quoteChar = char;
+                    } else if (char === quoteChar) {
+                        inQuotes = false;
+                        quoteChar = null;
+                    }
+                } else if (char === '#' && !inQuotes) {
+                    commentIndex = i;
+                    break;
+                }
+            }
+            
+            if (commentIndex !== -1) {
+                value = value.substring(0, commentIndex).trim();
+            }
+            
             // Remove surrounding quotes if present
             if ((value.startsWith('"') && value.endsWith('"')) || 
                 (value.startsWith("'") && value.endsWith("'"))) {
                 value = value.slice(1, -1);
             }
+            
             config[key] = value;
         }
     });
     
-    return { worker, config };
+    return config;
 }
 
 // Parse XYZ file to extract basic geometry info
@@ -178,8 +203,11 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
             return;
         }
 
-        // Parse config to extract worker and other settings
-        const { worker, config: configData } = parseConfigFile(configContent);
+        // Parse config to extract settings
+        const configData = parseConfigFile(configContent);
+        
+        // Extract worker from config (default to PySCF if not specified)
+        const worker = configData.worker || "PySCF";
         
         // Parse XYZ to extract geometry info
         const { atomCount } = parseXYZFile(xyzContent);
@@ -407,6 +435,10 @@ exports.terminationPostParseHandler = onRequest({cors: true}, async (req, res) =
         if (numberBetaElectrons !== null) {
             metaUpdate.numberBetaElectrons = numberBetaElectrons;
         }
+        // Note: This assumes legacy .in files. For folder-based jobs with .xyz files,
+        // the caller should pass the full path including folder (e.g., "job_20241201120001/molecule")
+        // and the extension should match the actual file type (.xyz for new jobs, .in for legacy)
+        // TODO: Make this handler support both .in and .xyz file types
         await updateJobMeta(`${baseFilename}.in`, "result", metaUpdate);
 
         const {status: parseRes} = await parseSimulationOutput(baseFilename);
