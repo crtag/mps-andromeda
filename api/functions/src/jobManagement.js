@@ -86,6 +86,53 @@ exports.getJobFileHandler = onRequest({cors: true}, async (req, res) => {
     }
 });
 
+// Parse config file to extract worker type and other settings
+function parseConfigFile(configContent) {
+    const lines = configContent.split("\n").map(line => line.trim()).filter(line => line);
+    
+    let worker = "PySCF"; // default
+    const config = {};
+    
+    // Basic parsing - extract worker type and other config fields
+    lines.forEach(line => {
+        // Look for worker type (case insensitive, supports WORKER=value or worker: value)
+        const workerMatch = line.match(/worker\s*[:=]\s*(\w+)/i);
+        if (workerMatch) {
+            worker = workerMatch[1];
+        }
+        
+        // Look for key-value pairs (key: value or key=value, handles quoted values)
+        // Matches: KEY=value, KEY="quoted value", KEY: value, etc.
+        const kvMatch = line.match(/(\w+)\s*[:=]\s*(.+)/);
+        if (kvMatch) {
+            const key = kvMatch[1].toLowerCase();
+            let value = kvMatch[2].trim();
+            // Remove surrounding quotes if present
+            if ((value.startsWith('"') && value.endsWith('"')) || 
+                (value.startsWith("'") && value.endsWith("'"))) {
+                value = value.slice(1, -1);
+            }
+            config[key] = value;
+        }
+    });
+    
+    return { worker, config };
+}
+
+// Parse XYZ file to extract basic geometry info
+function parseXYZFile(xyzContent) {
+    const lines = xyzContent.split("\n").map(line => line.trim()).filter(line => line);
+    
+    if (lines.length < 2) {
+        return { atomCount: 0 };
+    }
+    
+    // First line is atom count
+    const atomCount = parseInt(lines[0]) || 0;
+    
+    return { atomCount };
+}
+
 exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
     if (req.method !== "POST") {
         res.status(405).send("Method Not Allowed");
@@ -95,107 +142,193 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
     // see if dry run is indicated in query string via dryRun=true
     const dryRun = req.query?.dryRun === "true";
 
-    let content;
+    let configContent, xyzContent;
 
     try {
-        content = atob(req.body.content);
-        content = content.trim();
-        // replace all windows line endings with unix line endings
-        content = content.replace(/\r\n/g, "\n");
+        // Decode config file
+        if (req.body.configContent) {
+            configContent = atob(req.body.configContent);
+            configContent = configContent.trim();
+            configContent = configContent.replace(/\r\n/g, "\n");
+        }
+        
+        // Decode xyz file
+        if (req.body.xyzContent) {
+            xyzContent = atob(req.body.xyzContent);
+            xyzContent = xyzContent.trim();
+            xyzContent = xyzContent.replace(/\r\n/g, "\n");
+        }
     } catch (error) {
-        logger.error("Error decoding job file content. Expected base64 encodning.", error);
+        logger.error("Error decoding file content. Expected base64 encoding.", error);
         res.status(400).json({
             success: false,
-            message: "Error decoding job file content. Expected base64 encodning.",
+            message: "Error decoding file content. Expected base64 encoding.",
         });
         return;
     }
 
     try {
-        const originalFilename = req.body.filename;
+        const configFilename = req.body.configFilename;
+        const xyzFilename = req.body.xyzFilename;
+        const batchTimestamp = req.body.batchTimestamp; // Shared timestamp for batch
+        const batchIndex = req.body.batchIndex || "01"; // Index in batch (01, 02, etc.)
 
-        if (!content || !originalFilename) {
-            res.status(400).send("Content and filename are required");
+        if (!configContent || !xyzContent || !configFilename || !xyzFilename) {
+            res.status(400).send("Config and XYZ content and filenames are required");
             return;
         }
 
-        // Validate content
-        const validation = await validateJobSpec(content);
-        if (!validation.valid) {
-            res.status(400).json({
-                success: false,
-                message: "Validation failed",
-                errors: validation.errors,
-            });
-            return;
-        }
+        // Parse config to extract worker and other settings
+        const { worker, config: configData } = parseConfigFile(configContent);
+        
+        // Parse XYZ to extract geometry info
+        const { atomCount } = parseXYZFile(xyzContent);
 
-        // strip off any dangerous file name characters from originalFilename
-        // eslint-disable-next-line no-useless-escape
-        const safeFilename = originalFilename.replace(".in", "").replace(/[^a-zA-Z0-9_\-]/g, "_");
-
-        // Generate unique filename using truncated timestamp
-        const timestamp = new Date().toISOString()
+        // Generate folder name: job_{timestamp}{index}
+        // If batchTimestamp not provided, generate one
+        const timestamp = batchTimestamp || new Date().toISOString()
             .replace(/[^0-9]/g, "") // Remove non-digits
-            .slice(0, 12); // Take first 12 digits (enough for uniqueness)
-        let filename = `${safeFilename}_${timestamp}.in`;
+            .slice(0, 12); // Take first 12 digits
+        
+        // Ensure batchIndex is 2 digits
+        const index = batchIndex.toString().padStart(2, "0");
+        const jobFolderName = `job_${timestamp}${index}`;
+        
+        logger.info(`Creating job folder: ${jobFolderName} (batchTimestamp: ${batchTimestamp}, batchIndex: ${batchIndex}, index: ${index})`);
 
-        // extract the first line of the file to use as the job spec in metadata
-        const jobSpec = content.split("\n")[0];
+        // Use original filenames inside the folder
+        const originalConfigFilename = configFilename;
+        const originalXyzFilename = xyzFilename;
 
-        // extract multiplicity setting from the job spec, default is 1
-        // the string in QUICK job spec is `MULT=N` where N to be extracted
-        const multMatch = jobSpec.match(/MULT=(\d+)/);
-        const multiplicity = multMatch ? parseInt(multMatch[1]) : 1;
-
-        // detect Trajectory Simulation job type
-        const isTrajectoryJob = req.body.direction && req.body.stepSize && req.body.numSteps && req.body.steeredAtoms;
-
-        // create metadata object based on the job type
-        const defaultMeta = {
-            status: "PENDING",
+        // Create metadata for XYZ file (main job file)
+        const metadata = {
+            status: "DRAFT",
             submitTime: new Date().toISOString(),
-            jobSpec,
-            multiplicity,
-            description: req.body.description || ""
+            config: originalConfigFilename, // Reference to config file (original name)
+            worker: worker, // Worker type extracted from config
+            atomCount: atomCount,
+            description: req.body.description || "",
+            jobFolder: jobFolderName, // Store folder name in metadata
         };
-
-        const metadata = isTrajectoryJob ? {
-            ...defaultMeta,
-            isTrajectoryJob: true,
-            direction: req.body.direction,
-            stepSize: req.body.stepSize,
-            numSteps: req.body.numSteps,
-            steeredAtoms: req.body.steeredAtoms,
-            step: 1, // unconventionally start at 1
-        } : defaultMeta;
 
         if (dryRun) {
             res.status(200).json({
                 success: true,
-                message: "Job spec validated successfully, dry run complete",
-                filename,
-                content,
+                message: "Job validated successfully, dry run complete",
+                jobFolder: jobFolderName,
+                configFilename: originalConfigFilename,
+                xyzFilename: originalXyzFilename,
                 metadata,
             });
             return;
         }
 
-        filename = isTrajectoryJob ? `1_${filename}` : filename;
+        // Import saveJobFileInFolder
+        const { saveJobFileInFolder } = require("../storageOperations");
 
-        // Save to storage
-        await saveJobFile(filename, content, "spec", metadata);
+        // Save config file copy with original name inside folder
+        await saveJobFileInFolder(jobFolderName, originalConfigFilename, configContent, {
+            type: "config",
+            timestamp: new Date().toISOString(),
+        });
+
+        // Save XYZ file with original name inside folder (main job file)
+        await saveJobFileInFolder(jobFolderName, originalXyzFilename, xyzContent, metadata);
 
         res.status(200).json({
             success: true,
-            message: "Job spec uploaded successfully",
-            filename,
+            message: "Job uploaded successfully",
+            jobFolder: jobFolderName,
+            configFilename: originalConfigFilename,
+            xyzFilename: originalXyzFilename,
         });
     } catch (error) {
         logger.error("Error uploading job spec", error);
         res.status(500).json({
             success: false,
             message: "Error uploading job spec",
+        });
+    }
+});
+
+exports.confirmJobHandler = onRequest({cors: true}, async (req, res) => {
+    if (req.method !== "POST") {
+        res.status(405).send("Method Not Allowed");
+        return;
+    }
+
+    try {
+        const { jobFolder, filename } = req.body;
+
+        if (!jobFolder || !filename) {
+            res.status(400).json({
+                success: false,
+                message: "jobFolder and filename are required",
+            });
+            return;
+        }
+
+        // Construct the full path to the XYZ file
+        const fullPath = `${jobFolder}/${filename}`;
+        
+        // Update job status from DRAFT to PENDING
+        const { updateJobStatus } = require("../storageOperations");
+        await updateJobStatus(fullPath, "PENDING", {
+            confirmedTime: new Date().toISOString(),
+        });
+
+        res.status(200).json({
+            success: true,
+            message: "Job confirmed successfully",
+            jobFolder: jobFolder,
+            filename: filename,
+        });
+    } catch (error) {
+        logger.error("Error confirming job", error);
+        res.status(500).json({
+            success: false,
+            message: "Error confirming job",
+        });
+    }
+});
+
+exports.deleteJobHandler = onRequest({cors: true}, async (req, res) => {
+    if (req.method !== "POST") {
+        res.status(405).send("Method Not Allowed");
+        return;
+    }
+
+    try {
+        const { jobFolder, filename } = req.body;
+
+        if (!filename) {
+            res.status(400).json({
+                success: false,
+                message: "filename is required",
+            });
+            return;
+        }
+
+        // Construct the full path to the job file
+        // For folder-based jobs: jobFolder/filename
+        // For legacy jobs: just filename
+        const fullPath = jobFolder ? `${jobFolder}/${filename}` : filename;
+        
+        // Delete the job and all files in its folder
+        const { deleteJob } = require("../storageOperations");
+        await deleteJob(fullPath);
+
+        res.status(200).json({
+            success: true,
+            message: "Job deleted successfully",
+            jobFolder: jobFolder || null,
+            filename: filename,
+        });
+    } catch (error) {
+        logger.error("Error deleting job", error);
+        res.status(500).json({
+            success: false,
+            message: error.message || "Error deleting job",
         });
     }
 });

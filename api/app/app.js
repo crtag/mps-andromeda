@@ -33,6 +33,12 @@ const API = {
     UPLOAD: IS_LOCAL
         ? `${EMULATOR_BASE}/uploadJobSpec`
         : 'https://uploadjobspec-poloq3qrtq-uc.a.run.app',
+    CONFIRM: IS_LOCAL
+        ? `${EMULATOR_BASE}/confirmJob`
+        : 'https://confirmjob-poloq3qrtq-uc.a.run.app',
+    DELETE: IS_LOCAL
+        ? `${EMULATOR_BASE}/deleteJob`
+        : 'https://deletejob-poloq3qrtq-uc.a.run.app',
     JOBS: {
         PENDING_RUNNING: IS_LOCAL
             ? `${EMULATOR_BASE}/listPendingJobs`
@@ -56,8 +62,22 @@ const elements = {
     dropZone: document.getElementById('drop-zone'),
     fileInput: document.getElementById('fileInput'),
     status: document.getElementById('status'),
-    completedJobsSubtitle: document.getElementById('completed-jobs-subtitle')
+    completedJobsSubtitle: document.getElementById('completed-jobs-subtitle'),
+    configStatus: document.getElementById('config-status'),
+    xyzStatus: document.getElementById('xyz-status')
 };
+
+// File upload state
+const fileState = {
+    config: null, // { filename, content }
+    xyzFiles: []  // Array of { filename, content }
+};
+
+// Flag to prevent concurrent uploadAllJobs calls
+let isUploading = false;
+
+// Track pending file reads to avoid triggering uploadAllJobs while files are still being read
+let pendingFileReads = 0;
 
 // Event Listeners
 function initializeUpload() {
@@ -93,28 +113,242 @@ function unhighlight() {
 }
 
 function handleDrop(e) {
-    const file = e.dataTransfer.files[0];
-    handleFile(file);
+    const files = Array.from(e.dataTransfer.files);
+    files.forEach(file => handleFile(file));
 }
 
 function handleFileSelect(e) {
-    const file = e.target.files[0];
-    handleFile(file);
+    const files = Array.from(e.target.files);
+    files.forEach(file => handleFile(file));
+    // Reset input to allow selecting same files again
+    elements.fileInput.value = '';
 }
 
 // File Processing
 function handleFile(file) {
-    if (!file.name.endsWith('.in')) {
-        showStatus('Please upload a file with .in extension', 'error');
+    const filename = file.name.toLowerCase();
+    
+    if (filename.endsWith('.cfg')) {
+        handleConfigFile(file);
+    } else if (filename.endsWith('.xyz')) {
+        handleXYZFile(file);
+    } else {
+        showStatus('Please upload .cfg or .xyz files only', 'error');
+        return;
+    }
+}
+
+function handleConfigFile(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const content = e.target.result;
+        const wasOverwrite = fileState.config !== null;
+        const hadXYZFiles = fileState.xyzFiles.length > 0;
+        
+        fileState.config = {
+            filename: file.name,
+            content: btoa(content)
+        };
+        
+        elements.configStatus.textContent = `✓ Config file: ${file.name}${wasOverwrite ? ' (overwritten)' : ''}`;
+        elements.configStatus.style.color = '#28a745';
+        
+        // If config is uploaded and we have XYZ files, create jobs for all of them
+        if (hadXYZFiles && !isUploading) {
+            uploadAllJobs();
+        }
+    };
+    reader.onerror = () => {
+        showStatus('Error reading config file', 'error');
+    };
+    reader.readAsText(file);
+}
+
+function handleXYZFile(file) {
+    pendingFileReads++;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const content = e.target.result;
+        const xyzFile = {
+            filename: file.name,
+            content: btoa(content)
+        };
+        
+        // Add to array (allow duplicates for now, user can upload same file multiple times)
+        fileState.xyzFiles.push(xyzFile);
+        
+        updateXYZStatus();
+        
+        pendingFileReads--;
+        
+        // If config exists and we're not already uploading, and no files are still being read
+        if (fileState.config && !isUploading && pendingFileReads === 0) {
+            uploadAllJobs();
+        }
+    };
+    reader.onerror = () => {
+        pendingFileReads--;
+        showStatus('Error reading geometry file', 'error');
+    };
+    reader.readAsText(file);
+}
+
+function updateXYZStatus() {
+    const count = fileState.xyzFiles.length;
+    if (count === 0) {
+        elements.xyzStatus.textContent = 'Waiting for geometry files (.xyz)...';
+        elements.xyzStatus.style.color = '#666';
+    } else {
+        const fileNames = fileState.xyzFiles.map(f => f.filename).join(', ');
+        const statusText = fileState.config ? ' (jobs created)' : '';
+        elements.xyzStatus.textContent = `✓ ${fileNames}${statusText}`;
+        elements.xyzStatus.style.color = fileState.config ? '#28a745' : '#ffc107';
+    }
+}
+
+async function uploadSingleJob(xyzFile, removeFromArray = true, batchTimestamp = null, batchIndex = null) {
+    if (!fileState.config) {
         return;
     }
 
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-        const content = e.target.result;
-        await uploadFile(file.name, btoa(content));
-    };
-    reader.readAsText(file);
+    try {
+        showStatus(`Uploading job for ${xyzFile.filename}...`, '');
+        const response = await fetch(API.UPLOAD, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                configFilename: fileState.config.filename,
+                configContent: fileState.config.content,
+                xyzFilename: xyzFile.filename,
+                xyzContent: xyzFile.content,
+                batchTimestamp: batchTimestamp,
+                batchIndex: batchIndex
+            })
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) throw new Error(data.message || 'Upload failed');
+        
+        // Remove uploaded file from array if requested (only used internally by uploadAllJobs)
+        if (removeFromArray) {
+            const index = fileState.xyzFiles.findIndex(f => f.filename === xyzFile.filename && f.content === xyzFile.content);
+            if (index > -1) {
+                fileState.xyzFiles.splice(index, 1);
+                updateXYZStatus();
+            }
+        }
+        
+        fetchJobs();
+        
+        // Return job info for batch processing
+        return {
+            jobFolder: data.jobFolder,
+            xyzFilename: data.xyzFilename
+        };
+    } catch (error) {
+        showStatus(`Error uploading ${xyzFile.filename}: ${error.message}`, 'error');
+        throw error; // Re-throw so uploadAllJobs can handle it
+    }
+}
+
+async function uploadAllJobs() {
+    // Prevent concurrent calls
+    if (isUploading) {
+        return;
+    }
+    
+    if (!fileState.config || fileState.xyzFiles.length === 0) {
+        return;
+    }
+
+    isUploading = true;
+
+    try {
+        // Create a copy of the array to avoid issues while iterating
+        const xyzFilesToUpload = [...fileState.xyzFiles];
+        
+        // Clear the array immediately to prevent duplicate uploads
+        fileState.xyzFiles = [];
+        updateXYZStatus();
+        
+        // Generate shared batch timestamp for all jobs in this batch
+        const batchTimestamp = new Date().toISOString()
+            .replace(/[^0-9]/g, "") // Remove non-digits
+            .slice(0, 12); // Take first 12 digits
+        
+        // Upload all jobs sequentially with batch index
+        const createdJobs = [];
+        let failCount = 0;
+        let batchIndex = 1;
+        
+        for (const xyzFile of xyzFilesToUpload) {
+            try {
+                const indexStr = batchIndex.toString().padStart(2, "0"); // 01, 02, etc.
+                console.log(`Uploading job ${indexStr} of batch ${batchTimestamp} for ${xyzFile.filename}`);
+                const jobInfo = await uploadSingleJob(xyzFile, false, batchTimestamp, indexStr);
+                if (jobInfo) {
+                    createdJobs.push(jobInfo);
+                }
+                batchIndex++;
+                // Small delay between uploads to avoid overwhelming the server
+                await new Promise(resolve => setTimeout(resolve, 100));
+            } catch (error) {
+                failCount++;
+                batchIndex++; // Still increment index even on failure
+                // Continue with next file even if one fails
+            }
+        }
+        
+        // Reset config file after jobs are created
+        fileState.config = null;
+        elements.configStatus.textContent = 'Waiting for config file (.cfg)...';
+        elements.configStatus.style.color = '#666';
+        
+        // Show summary with individual job messages
+        if (createdJobs.length > 0 && failCount === 0) {
+            const jobMessages = createdJobs.map(job => 
+                `Successfully created draft ${job.jobFolder}/${job.xyzFilename}`
+            ).join('\n');
+            showStatus(jobMessages, 'success');
+        } else if (createdJobs.length > 0 && failCount > 0) {
+            const jobMessages = createdJobs.map(job => 
+                `Successfully created draft ${job.jobFolder}/${job.xyzFilename}`
+            ).join('\n');
+            showStatus(`${jobMessages}\n${failCount} job${failCount > 1 ? 's' : ''} failed`, 'error');
+        } else {
+            showStatus(`Failed to upload ${failCount} job${failCount > 1 ? 's' : ''}`, 'error');
+        }
+    } finally {
+        // Always reset upload flag, even if there's an error
+        isUploading = false;
+    }
+    
+    // Show summary with individual job messages
+    if (createdJobs.length > 0 && failCount === 0) {
+        const jobMessages = createdJobs.map(job => 
+            `Successfully created draft ${job.jobFolder}/${job.xyzFilename}`
+        ).join('\n');
+        showStatus(jobMessages, 'success');
+    } else if (createdJobs.length > 0 && failCount > 0) {
+        const jobMessages = createdJobs.map(job => 
+            `Successfully created draft ${job.jobFolder}/${job.xyzFilename}`
+        ).join('\n');
+        showStatus(`${jobMessages}\n${failCount} job${failCount > 1 ? 's' : ''} failed`, 'error');
+    } else {
+        showStatus(`Failed to upload ${failCount} job${failCount > 1 ? 's' : ''}`, 'error');
+    }
+}
+
+function resetFileState() {
+    fileState.config = null;
+    fileState.xyzFiles = [];
+    elements.configStatus.textContent = 'Waiting for config file (.cfg)...';
+    elements.configStatus.style.color = '#666';
+    elements.xyzStatus.textContent = 'Waiting for geometry files (.xyz)...';
+    elements.xyzStatus.style.color = '#666';
 }
 
 // URL Helpers
@@ -166,9 +400,23 @@ async function fetchJobs() {
         if (!pendingResponse.ok) throw new Error('Failed to fetch pending/running jobs');
         const activeJobs = await pendingResponse.json();
         
-        const pending = activeJobs.filter(job => job.status !== 'RUNNING');
-        const running = activeJobs.filter(job => job.status === 'RUNNING');
+        // Deduplicate jobs by fullPath or jobFolder+filename
+        const uniqueJobs = [];
+        const seenKeys = new Set();
+        for (const job of activeJobs) {
+            const key = job.fullPath || `${job.jobFolder || ''}/${job.filename}`;
+            if (!seenKeys.has(key)) {
+                seenKeys.add(key);
+                uniqueJobs.push(job);
+            }
+        }
         
+        // Separate jobs by status
+        const drafts = uniqueJobs.filter(job => job.status === 'DRAFT');
+        const pending = uniqueJobs.filter(job => job.status === 'PENDING');
+        const running = uniqueJobs.filter(job => job.status === 'RUNNING');
+        
+        updateJobsList('draft-jobs', drafts, false, true);
         updateJobsList('pending-jobs', pending);
         updateJobsList('running-jobs', running);
 
@@ -183,7 +431,107 @@ async function fetchJobs() {
     }
 }
 
-function updateJobsList(sectionId, jobs, isCompleted = false) {
+const confirmingJobs = new Set();
+
+async function confirmJob(jobFolder, filename) {
+    const jobKey = `${jobFolder}/${filename}`;
+    
+    if (confirmingJobs.has(jobKey)) {
+        return;
+    }
+    
+    confirmingJobs.add(jobKey);
+    
+    try {
+        showStatus('Confirming job...', '');
+        const response = await fetch(API.CONFIRM, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                jobFolder: jobFolder,
+                filename: filename
+            })
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) throw new Error(data.message || 'Confirm failed');
+        
+        showStatus('Job confirmed successfully', 'success');
+        // Small delay to ensure status update propagates before refreshing
+        setTimeout(() => {
+            fetchJobs(); // Refresh job list
+        }, 500);
+    } catch (error) {
+        showStatus(`Error confirming job: ${error.message}`, 'error');
+    } finally {
+        confirmingJobs.delete(jobKey);
+    }
+}
+
+// Make confirmJob globally accessible for onclick handlers
+window.confirmJob = confirmJob;
+
+const deletingJobs = new Set();
+
+async function deleteJob(jobFolder, filename, skipConfirmation = false) {
+    // Handle null string from onclick handlers
+    if (jobFolder === 'null' || jobFolder === null) {
+        jobFolder = null;
+    }
+    
+    const displayPath = jobFolder ? `${jobFolder}/${filename}` : filename;
+    const jobKey = jobFolder ? `${jobFolder}/${filename}` : filename;
+    
+    if (deletingJobs.has(jobKey)) {
+        return;
+    }
+    
+    if (!skipConfirmation && !confirm(`Are you sure you want to delete ${displayPath}?`)) {
+        return;
+    }
+    
+    deletingJobs.add(jobKey);
+    
+    try {
+        showStatus('Deleting job...', '');
+        const response = await fetch(API.DELETE, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                jobFolder: jobFolder || null,
+                filename: filename
+            })
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) throw new Error(data.message || 'Delete failed');
+        
+        showStatus('Job deleted successfully', 'success');
+        setTimeout(() => {
+            fetchJobs(); // Refresh job list
+        }, 500);
+    } catch (error) {
+        showStatus(`Error deleting job: ${error.message}`, 'error');
+    } finally {
+        deletingJobs.delete(jobKey);
+    }
+}
+
+async function cancelJob(jobFolder, filename) {
+    await deleteJob(jobFolder, filename, true);
+}
+
+// Make deleteJob and cancelJob globally accessible for onclick handlers
+window.deleteJob = deleteJob;
+window.cancelJob = cancelJob;
+
+function updateJobsList(sectionId, jobs, isCompleted = false, isDraft = false) {
     const section = document.getElementById(sectionId);
     const list = section.querySelector('.jobs-list');
     
@@ -198,13 +546,15 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
             `<a href="${link.url}" download target="_blank">${link.text}</a>`
         ).join('');
 
+        // Build file path for folder-based jobs
+        const filePath = job.jobFolder ? `${job.jobFolder}/${job.filename}` : job.filename;
+        const fileUrl = getFileUrl(filePath, isCompleted ? 'result' : 'spec');
+
         return `
             <div class="job-item">
                 <div class="job-filename">
                     
-                    <a href="${getFileUrl(
-                        isCompleted ? job.specFile : job.filename, 
-                        isCompleted ? 'result' : 'spec')}" class="filename-link">${job.filename}</a>
+                    <a href="${fileUrl}" class="filename-link">${job.jobFolder ? `${job.jobFolder}/${job.filename}` : job.filename}</a>
                     
                     ${isCompleted && job?.normalTermination ?
                         job.normalTermination === 'true' ?  
@@ -234,6 +584,19 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
                     
                 </div>
 
+                ${isDraft ? `
+                <div class="job-actions">
+                    <button class="btn-confirm" onclick="confirmJob(${job.jobFolder ? `'${job.jobFolder}'` : 'null'}, '${job.filename}')">Confirm</button>
+                    <button class="btn-delete" onclick="cancelJob(${job.jobFolder ? `'${job.jobFolder}'` : 'null'}, '${job.filename}')">Cancel</button>
+                </div>
+                ` : ''}
+                
+                ${!isCompleted && !isDraft && job.status === 'PENDING' ? `
+                <div class="job-actions">
+                    <button class="btn-delete" onclick="deleteJob(${job.jobFolder ? `'${job.jobFolder}'` : 'null'}, '${job.filename}')">Delete</button>
+                </div>
+                ` : ''}
+
                 ${job?.jobSpec ? 
                     `<div class="job-spec">${job.jobSpec}
                         ${isCompleted ? `
@@ -261,23 +624,33 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
 }
 
 // API Calls
-async function uploadFile(filename, content) {
+async function uploadFiles() {
+    if (!fileState.config || !fileState.xyz) {
+        showStatus('Both config and geometry files are required', 'error');
+        return;
+    }
+
     try {
-        showStatus('Uploading...', '');
+        showStatus('Uploading job...', '');
         const response = await fetch(API.UPLOAD, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ filename, content })
+            body: JSON.stringify({
+                configFilename: fileState.config.filename,
+                configContent: fileState.config.content,
+                xyzFilename: fileState.xyz.filename,
+                xyzContent: fileState.xyz.content
+            })
         });
 
         const data = await response.json();
         
         if (!response.ok) throw new Error(data.message || 'Upload failed');
         
-        showStatus(`Upload successful: ${data.filename}`, 'success');
-        elements.fileInput.value = '';
+        showStatus(`Job uploaded successfully: ${data.xyzFilename}`, 'success');
+        resetFileState();
         fetchJobs();
     } catch (error) {
         showStatus(`Error: ${error.message}`, 'error');
@@ -286,13 +659,16 @@ async function uploadFile(filename, content) {
 
 // UI Updates
 function showStatus(message, type) {
-    elements.status.textContent = message;
+    // Replace newlines with <br> tags for proper display
+    const htmlMessage = message.replace(/\n/g, '<br>');
+    elements.status.innerHTML = htmlMessage;
     elements.status.style.display = 'block';
     elements.status.className = 'status' + (type ? ` ${type}` : '');
 }
 
 function startPolling() {
     // Show sections
+    document.getElementById('draft-jobs').hidden = false;
     document.getElementById('pending-jobs').hidden = false;
     document.getElementById('running-jobs').hidden = false;
     document.getElementById('completed-jobs').hidden = false;

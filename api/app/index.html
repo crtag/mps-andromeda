@@ -62,10 +62,21 @@
         <section id="upload-section">
             <h2>Add New Job</h2>
             <div id="drop-zone" class="drop-zone">
-                Drag and drop job spec file here or click to browse
-                <input type="file" id="fileInput" hidden accept=".in">
+                Drag and drop geometry (.xyz) and config (.cfg) files here or click to browse
+                <input type="file" id="fileInput" hidden accept=".cfg,.xyz" multiple>
+            </div>
+            <div id="file-status" style="margin-top: 10px; font-size: 0.9em; color: #666;">
+                <div id="xyz-status">Waiting for geometry files (.xyz)...</div>
+                <div id="config-status">Waiting for config file (.cfg)...</div>
             </div>
             <div id="status" class="status" style="display: none;"></div>
+        </section>
+
+        <section id="draft-jobs" hidden>
+            <h2>Draft Jobs</h2>
+            <div class="jobs-list">
+                <div class="no-jobs">Loading...</div>
+            </div>
         </section>
 
         <section id="pending-jobs" hidden>

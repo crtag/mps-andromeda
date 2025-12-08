@@ -25,23 +25,56 @@ async function listFilesWithQuery(prefix, matchGlob) {
 
 async function listPendingJobs() {
     try {
-        const files = await listFilesWithQuery(JOBS_PREFIX, "**.in");
+        // Look for both .in files (legacy) and .xyz files (new folder structure)
+        // Exclude .cfg files - they are not job files
+        const inFiles = await listFilesWithQuery(JOBS_PREFIX, "**.in");
+        const xyzFiles = await listFilesWithQuery(JOBS_PREFIX, "**.xyz");
+        const allFiles = [...inFiles, ...xyzFiles];
 
-        const jobPromises = files
+        const jobPromises = allFiles
             .filter((file) => file.exists())
             .map(async (file) => {
                 const [metadata] = await file.getMetadata();
+                // Extract folder name if file is in a folder (e.g., job-specs/job_20241201120001/molecule.xyz)
+                const relativePath = file.name.replace(JOBS_PREFIX, "");
+                const pathParts = relativePath.split("/");
+                const jobFolder = pathParts.length > 1 ? pathParts[0] : null;
+                const filename = pathParts.length > 1 ? pathParts[pathParts.length - 1] : relativePath;
+                
+                // Skip config files - they should never appear as jobs
+                if (filename.toLowerCase().endsWith('.cfg')) {
+                    return null;
+                }
+                
+                const status = metadata.metadata?.status || "PENDING";
+                
                 return {
                     ...metadata.metadata,
-                    filename: file.name.replace(JOBS_PREFIX, ""), // Remove prefix for client use
+                    filename: filename,
+                    jobFolder: jobFolder,
+                    fullPath: relativePath, // Keep full path for reference
                     submitTime: metadata.timeCreated,
-                    status: metadata.metadata?.status || "PENDING",
+                    status: status,
                     lastUpdate: metadata.metadata?.lastUpdate,
                 };
             });
 
-        const jobs = await Promise.all(jobPromises);
-        return jobs.sort((a, b) => new Date(a.submitTime) - new Date(b.submitTime));
+        const jobResults = await Promise.all(jobPromises);
+        // Filter out null values (filtered files)
+        const jobs = jobResults.filter(job => job !== null);
+        
+        // Deduplicate jobs by fullPath (same file shouldn't appear twice)
+        const uniqueJobs = [];
+        const seenPaths = new Set();
+        for (const job of jobs) {
+            const key = job.fullPath || `${job.jobFolder || ''}/${job.filename}`;
+            if (!seenPaths.has(key)) {
+                seenPaths.add(key);
+                uniqueJobs.push(job);
+            }
+        }
+        
+        return uniqueJobs.sort((a, b) => new Date(a.submitTime) - new Date(b.submitTime));
     } catch (error) {
         logger.error("Error listing pending jobs", error);
         throw error;
@@ -166,6 +199,29 @@ async function saveJobFile(filename, content, type, metadata = {}) {
         return true;
     } catch (error) {
         logger.error("Error saving job file", error);
+        throw error;
+    }
+}
+
+async function saveJobFileInFolder(folderPath, filename, content, metadata = {}) {
+    try {
+        const fullPath = `${JOBS_PREFIX}${folderPath}/${filename}`;
+        const file = getBucket().file(fullPath);
+
+        await file.save(content, {
+            contentType: "text/plain",
+        });
+
+        await file.setMetadata({
+            metadata: {
+                ...metadata,
+                timestamp: new Date().toISOString(),
+            },
+        });
+
+        return true;
+    } catch (error) {
+        logger.error("Error saving job file in folder", error);
         throw error;
     }
 }
@@ -495,17 +551,51 @@ async function moveJobToTrajectory(filename) {
     }
 }
 
+async function deleteJob(fullPath) {
+    try {
+        const jobPath = `${JOBS_PREFIX}${fullPath}`;
+        const file = getBucket().file(jobPath);
+        const [exists] = await file.exists();
+        
+        if (!exists) {
+            throw new Error(`Job not found: [${jobPath}]`);
+        }
+
+        // Check if this is a folder-based job (path contains '/')
+        const pathParts = fullPath.split('/');
+        if (pathParts.length > 1) {
+            // Folder-based job: delete all files in the folder
+            const folderPath = pathParts[0];
+            const folderPrefix = `${JOBS_PREFIX}${folderPath}/`;
+            const [files] = await getBucket().getFiles({ prefix: folderPrefix });
+            
+            logger.info(`Deleting ${files.length} files from folder ${folderPath}`);
+            await Promise.all(files.map(f => f.delete()));
+            return true;
+        } else {
+            // Legacy single file job: delete just the file
+            await file.delete();
+            return true;
+        }
+    } catch (error) {
+        logger.error("Error deleting job", error);
+        throw error;
+    }
+}
+
 module.exports = {
     listPendingJobs,
     listCompletedJobs,
     getJobFile,
     saveJobFile,
+    saveJobFileInFolder,
     updateJobMeta,
     updateJobStatus,
     moveJobToResults,
     moveJobToTrajectory,
     trackNormalTermination,
     parseSimulationOutput,
+    deleteJob,
     JOBS_PREFIX,
     RESULTS_PREFIX,
 };

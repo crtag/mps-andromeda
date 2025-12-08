@@ -369,6 +369,31 @@ h2 > div {
     vertical-align: text-bottom;
 }
 
+.job-actions {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #eee;
+}
+
+.btn-confirm {
+    background: #28a745;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.btn-confirm:hover {
+    background: #218838;
+}
+
+.btn-confirm:active {
+    background: #1e7e34;
+}
+
 
 .form-group, .direction-group {
     margin: 20px 0 0;
