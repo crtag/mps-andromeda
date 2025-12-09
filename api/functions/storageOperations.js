@@ -15,7 +15,20 @@ const RESULTS_PREFIX = "job-results/";
 const TRAJECTORY_PREFIX = "job-trajectories/";
 
 // Get default bucket reference
-const getBucket = () => storage.bucket();
+const getBucket = () => {
+    const red = '\x1b[31m';
+    const green = '\x1b[32m';
+    const reset = '\x1b[0m'; // Resets color to default
+
+    if ('true' === process.env.FUNCTIONS_EMULATOR) {
+        console.log(green + "Using dev storage bucket: mps-andromeda-dev.appspot.com" + reset);
+        // dealing with the dev environment
+        const bucketName = "mps-andromeda-dev";
+        return storage.bucket(bucketName);
+    }
+    console.log(red + "Using production storage bucket" + reset);
+    return storage.bucket()
+};
 
 // Utility function to list files with a specific prefix
 async function listFilesWithQuery(prefix, matchGlob) {
