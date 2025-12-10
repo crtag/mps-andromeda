@@ -25,6 +25,8 @@ Functions require dependencies, install them
 ```bash
 TMPDIR=$HOME/.firebase-tmp firebase emulators:start --only functions,storage,hosting --import=./emulator-data --export-on-exit=./emulator-data
 ```
+> Note: Firebase storage emulator uses a temp directory by default, which can lead to permission issues on shared machines. This will cause emulator startup failures with permission denined messages. 
+
 
 This sets a user-specific temp directory to avoid conflicts on shared machines.
 
