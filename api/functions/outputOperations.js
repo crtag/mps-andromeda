@@ -1,6 +1,38 @@
 const {logger} = require("firebase-functions");
 
 /**
+ * Parse the output file content and extract the relevant information.
+ * @param {string} outputContent - The content of the output file.
+ * @return {Object} An object containing the extracted information.
+ */
+function parseOutputFile(outputContent) {
+    const lines = outputContent.split("\n").filter(line => line.trim());
+    const lastOutputLine = lines.length > 0 ? lines[lines.length - 1] : "";
+    const normalTermination = lastOutputLine.includes("Normal Termination");
+
+    const molecularContent = extractMoleculeInput(outputContent);
+    
+    const result = {
+        normalTermination,
+        lastOutputLine,
+        ...molecularContent,
+    };
+
+    if (normalTermination) {
+        const startSep = "================ OPTIMIZED GEOMETRY INFORMATION ==============";
+        const endSep = null;
+        const simulationResults = extractSection(outputContent, startSep, endSep, true);
+        const {optimizedGeometry, minimizedEnergy, totalTime} = extractSimulationResults(simulationResults);
+        
+        result.optimizedGeometry = optimizedGeometry;
+        result.minimizedEnergy = minimizedEnergy;
+        result.totalTime = totalTime;
+    }
+
+    return result;
+}
+
+/**
  * Extract content between two separators
  * @param {string} content - Full text content
  * @param {string|null} startSep - Starting separator (null means start of string)
@@ -145,6 +177,8 @@ function extractSimulationResults(content) {
 
     return {optimizedGeometry, minimizedEnergy, totalTime};
 }
+
+
 
 /**
  * Parse compact HKL format without separators (e.g., "01-1", "011", "10-1").
@@ -421,4 +455,4 @@ function steerXYZ(currentXYZ, steeredAtoms, stepSize, hkl) {
     return formatXYZ(newRecords);
 }
 
-module.exports = {extractSection, extractReverse, extractMoleculeInput, extractSimulationResults, steerXYZ};
+module.exports = {extractSection, extractReverse, extractMoleculeInput, extractSimulationResults, parseOutputFile, steerXYZ};

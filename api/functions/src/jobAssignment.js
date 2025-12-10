@@ -1,6 +1,6 @@
 const {onRequest} = require("firebase-functions/v2/https");
 const {logger} = require("firebase-functions");
-const {listPendingJobs, getJobFile, updateJobStatus} = require("../storageOperations");
+const {listPendingAndDraftJobs, updateJobStatus, moveJobToResults} = require("../storageOperations");
 
 // include sample text file
 const fs = require("fs");
@@ -8,27 +8,31 @@ const path = require("path");
 const sampleJobPath = path.join(__dirname, "sample_job.in");
 // end of include
 
-async function getMostRecentPendingJob() {
-    const pendingJobs = await listPendingJobs();
+async function getNextJobToRun(workerType) {
+    const pendingJobs = await listPendingAndDraftJobs();
     if (pendingJobs.length === 0) return null;
 
-    // Get the first job in PENDING status (they're already sorted by submitTime)
-    const job = pendingJobs.find((job) => job.status === "PENDING");
+    // Filter by worker type and PENDING status
+    const job = pendingJobs.find((job) => 
+        job.status === "PENDING" && 
+        job.worker && 
+        job.worker.toLowerCase() === workerType.toLowerCase()
+    );
     if (!job) return null;
 
     try {
-        const content = await getJobFile(job.filename, "spec");
-        // this is the start of simulation
-        await updateJobStatus(job.filename, "RUNNING", {
+        // Update job status to RUNNING
+        await updateJobStatus(job.jobFilePath, "RUNNING", {
             startTime: new Date().toISOString(),
         });
 
-        return {
-            filename: job.filename,
-            content: content,
-        };
+        // Move folder to RESULTS when job starts running
+        await moveJobToResults(job.jobFolder);
+
+        // Return only the job folder name
+        return job.jobFolder;
     } catch (error) {
-        logger.error("Error getting job content", error);
+        logger.error("Error updating job status", error);
         throw error;
     }
 }
@@ -39,33 +43,36 @@ exports.handler = onRequest({cors: true}, async (req, res) => {
         return;
     }
 
-    logger.info("Start checking pending jobs", {structuredData: true});
+    const workerType = req.query.worker;
+    if (!workerType) {
+        res.status(400).send("Missing required query parameter: worker");
+        return;
+    }
+
+    logger.info(`Start checking pending jobs for ${workerType}`, {structuredData: true});
 
     // Handle sample request
-    if (req.path === "/sample") {
-        logger.info("Sample job requested", {structuredData: true});
+    if (req.path === "/sample" || req.query.sample === "true") {
+        logger.info(`Sample job requested for ${workerType}`, {structuredData: true});
         res.status(200);
         res.set("Content-Type", "text/plain");
         res.send(fs.readFileSync(sampleJobPath, "utf8"));
         return;
     }
 
-    // Get most recent job spec
+    // Get most recent job folder for this worker type
     try {
-        const jobSpec = await getMostRecentPendingJob();
-        if (!jobSpec) {
+        const jobFolder = await getNextJobToRun(workerType);
+        if (!jobFolder) {
             res.status(204).send();
             return;
         }
 
-        // append the file name to the start of the content
-        jobSpec.content = `${jobSpec.filename}\n${jobSpec.content}`;
-
         res.status(200);
         res.set("Content-Type", "text/plain");
-        res.send(jobSpec.content);
+        res.send(jobFolder);
     } catch (error) {
-        logger.error("Error retrieving job spec", error);
+        logger.error(`Error retrieving job folder for ${workerType}`, error);
         res.status(500).send("Internal Server Error");
     }
 });

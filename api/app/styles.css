@@ -370,15 +370,14 @@ h2 > div {
 }
 
 .job-actions {
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px solid #eee;
+    margin-top: 5px;
+    padding-top: 0;
 }
 
 .btn-confirm {
-    background: #28a745;
+    background: #5f5d5d;
     color: white;
-    padding: 8px 16px;
+    padding: 4px 6px;
     border: none;
     border-radius: 4px;
     cursor: pointer;
@@ -390,11 +389,20 @@ h2 > div {
     background: #218838;
 }
 
-.btn-confirm:active {
-    background: #1e7e34;
+.btn-delete {
+    background: #5f5d5d;
+    color: white;
+    padding: 4px 6px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
 }
 
-
+.btn-delete:hover {
+    background: #ad2929;
+}
 .form-group, .direction-group {
     margin: 20px 0 0;
 }

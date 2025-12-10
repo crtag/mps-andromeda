@@ -1,35 +1,24 @@
 const {onRequest} = require("firebase-functions/v2/https");
 const {logger} = require("firebase-functions");
+const fs = require("fs");
+const path = require("path");
 const {
-    listPendingJobs,
-    listCompletedJobs,
+    listPendingAndDraftJobs,
+    listCompletedAndRunningJobs,
     getJobFile,
-    saveJobFile,
     trackNormalTermination,
     parseSimulationOutput,
     updateJobMeta,
+    deleteJob,
+    RESULTS_PREFIX,
+    JOBS_PREFIX,
 } = require("../storageOperations");
 const {extractMoleculeInput} = require("../outputOperations");
 
-async function validateJobSpec(content) {
-    const lines = content.split("\n");
-    const errors = [];
-
-    if (lines.length < 3) {
-        errors.push("Job spec must be at least 3 lines");
-        return {valid: false, errors};
-    }
-
-    // Check if the second line is empty
-    if (lines[1].trim() !== "") {
-        errors.push("Second line must be empty");
-    }
-
-    return {
-        valid: errors.length === 0,
-        errors,
-    };
-}
+const fileViewerTemplate = fs.readFileSync(
+    path.join(__dirname, "templates", "fileViewer.html"),
+    "utf8"
+);
 
 exports.listPendingJobsHandler = onRequest({cors: true}, async (req, res) => {
     if (req.method !== "GET") {
@@ -38,7 +27,7 @@ exports.listPendingJobsHandler = onRequest({cors: true}, async (req, res) => {
     }
 
     try {
-        const jobs = await listPendingJobs();
+        const jobs = await listPendingAndDraftJobs();
         res.status(200).json(jobs);
     } catch (error) {
         logger.error("Error listing pending jobs", error);
@@ -46,7 +35,7 @@ exports.listPendingJobsHandler = onRequest({cors: true}, async (req, res) => {
     }
 });
 
-exports.listCompletedJobsHandler = onRequest({cors: true}, async (req, res) => {
+exports.listCompletedAndRunningJobsHandler = onRequest({cors: true}, async (req, res) => {
     if (req.method !== "GET") {
         res.status(405).send("Method Not Allowed");
         return;
@@ -54,7 +43,7 @@ exports.listCompletedJobsHandler = onRequest({cors: true}, async (req, res) => {
 
     try {
         const limit = parseInt(req.query.limit) || 10;
-        const jobs = await listCompletedJobs(limit);
+        const jobs = await listCompletedAndRunningJobs(limit);
         res.status(200).json(jobs);
     } catch (error) {
         logger.error("Error listing completed jobs", error);
@@ -69,16 +58,42 @@ exports.getJobFileHandler = onRequest({cors: true}, async (req, res) => {
     }
 
     try {
-        const {filename, type} = req.query;
+        const {filename, type, view} = req.query;
         if (!filename || !type) {
             res.status(400).send("Missing required parameters");
             return;
         }
 
         const content = await getJobFile(filename, type);
-        // force download headers
-        res.set("Content-Disposition", `attachment; filename="${filename}"`);
-        res.status(200).send(content);
+        // Extract just the filename from path (e.g., "job_folder/file.xyz" -> "file.xyz")
+        const downloadFilename = filename.includes('/') ? filename.split('/').pop() : filename;
+        
+        // If view=true, serve inline with whitespace preservation; otherwise force download
+        if (view === 'true') {
+            // Escape HTML entities to prevent XSS for display
+            const escapedContent = content
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            
+            // JSON-encode content and filename for JavaScript injection
+            const fileContentJson = JSON.stringify(content);
+            const filenameJson = JSON.stringify(downloadFilename);
+            
+            // Use template file
+            const htmlContent = fileViewerTemplate
+                .replace(/\{\{FILENAME\}\}/g, downloadFilename)
+                .replace(/\{\{FILENAME_JSON\}\}/g, filenameJson)
+                .replace(/\{\{FILE_CONTENT_JSON\}\}/g, fileContentJson)
+                .replace(/\{\{CONTENT\}\}/g, escapedContent);
+            
+            res.set("Content-Type", "text/html; charset=utf-8");
+            res.set("Content-Disposition", `inline; filename="${downloadFilename}"`);
+            res.status(200).send(htmlContent);
+        } else {
+            res.set("Content-Disposition", `attachment; filename="${downloadFilename}"`);
+            res.status(200).send(content);
+        }
     } catch (error) {
         logger.error("Error getting job file", error);
         res.status(error.message === "File not found" ? 404 : 500)
@@ -206,8 +221,40 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
         // Parse config to extract settings
         const configData = parseConfigFile(configContent);
         
-        // Extract worker from config (default to PySCF if not specified)
-        const worker = configData.worker || "PySCF";
+        // Supported workers list
+        const supportedWorkers = ["PySCF", "QUICK"]; //  "UMA"
+        
+        // Extract worker from config, trim whitespace and normalize
+        const workerRaw = configData.worker ? configData.worker.trim() : null;
+        const workerNormalized = workerRaw ? workerRaw.toLowerCase() : null;
+        
+        // Find matching worker (case-insensitive) - returns exact text from standard list
+        const worker = workerNormalized 
+            ? supportedWorkers.find(w => w.toLowerCase() === workerNormalized)
+            : null;
+        
+        if (!worker) {
+            res.status(400).json({
+                success: false,
+                message: `WORKER=${workerRaw || 'null'} not supported. Supported workers: ${supportedWorkers.join(", ")}`
+            });
+            return;
+        }
+        
+        // Extract tags from config if present
+        const tags = configData.tags || null;
+        
+        // Extract jobSpec based on worker type
+        let jobSpec = null;
+        if (worker === "QUICK") {
+            jobSpec = configData.spec || null;
+        } else if (worker === "PySCF") {
+            const parts = [];
+            if (configData.functional) parts.push(`FUNCTIONAL=${configData.functional}`);
+            if (configData.basis) parts.push(`BASIS=${configData.basis}`);
+            if (configData.task) parts.push(`TASK=${configData.task}`);
+            jobSpec = parts.length > 0 ? parts.join(", ") : null;
+        }
         
         // Parse XYZ to extract geometry info
         const { atomCount } = parseXYZFile(xyzContent);
@@ -234,6 +281,8 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
             submitTime: new Date().toISOString(),
             config: originalConfigFilename, // Reference to config file (original name)
             worker: worker, // Worker type extracted from config
+            tags: tags, // Tags extracted from config
+            jobSpec: jobSpec, // Job specifications (SPEC for QUICK, FUNCTIONAL BASIS TASK for PySCF)
             atomCount: atomCount,
             description: req.body.description || "",
             jobFolder: jobFolderName, // Store folder name in metadata
@@ -297,7 +346,7 @@ exports.confirmJobHandler = onRequest({cors: true}, async (req, res) => {
         }
 
         // Construct the full path to the XYZ file
-        const fullPath = `${jobFolder}/${filename}`;
+        const fullPath = `${JOBS_PREFIX}${jobFolder}/${filename}`;
         
         // Update job status from DRAFT to PENDING
         const { updateJobStatus } = require("../storageOperations");
@@ -325,32 +374,15 @@ exports.deleteJobHandler = onRequest({cors: true}, async (req, res) => {
         res.status(405).send("Method Not Allowed");
         return;
     }
-
     try {
-        const { jobFolder, filename } = req.body;
-
-        if (!filename) {
-            res.status(400).json({
-                success: false,
-                message: "filename is required",
-            });
-            return;
-        }
-
-        // Construct the full path to the job file
-        // For folder-based jobs: jobFolder/filename
-        // For legacy jobs: just filename
-        const fullPath = jobFolder ? `${jobFolder}/${filename}` : filename;
-        
+        const { jobFolder } = req.body;        
         // Delete the job and all files in its folder
-        const { deleteJob } = require("../storageOperations");
-        await deleteJob(fullPath);
+        await deleteJob(jobFolder);
 
         res.status(200).json({
             success: true,
             message: "Job deleted successfully",
-            jobFolder: jobFolder || null,
-            filename: filename,
+            jobFolder: jobFolder,
         });
     } catch (error) {
         logger.error("Error deleting job", error);
@@ -361,97 +393,3 @@ exports.deleteJobHandler = onRequest({cors: true}, async (req, res) => {
     }
 });
 
-exports.terminationPostScanHandler = onRequest({cors: true}, async (req, res) => {
-    if (req.method !== "POST") {
-        res.status(405).send("Method Not Allowed");
-        return;
-    }
-
-    try {
-        const baseFilename = req.body.filename;
-
-        if (!baseFilename) {
-            res.status(400).send("Filename is required");
-            return;
-        }
-
-        const trackRes = await trackNormalTermination(baseFilename, true);
-        if (!trackRes) {
-            res.status(500).send("Job output tracking failed");
-            return;
-        }
-    } catch (error) {
-        logger.error("Error while post scanning", error);
-        res.status(500)
-            .send(error.message || "Internal Server Error");
-        return;
-    }
-
-    res.status(200).send("OK");
-});
-
-exports.terminationPostParseHandler = onRequest({cors: true}, async (req, res) => {
-    if (req.method !== "POST") {
-        res.status(405).send("Method Not Allowed");
-        return;
-    }
-
-    try {
-        const baseFilename = req.body.filename;
-
-        if (!baseFilename) {
-            res.status(400).send("Filename is required");
-            return;
-        }
-
-        // download the output file content
-        let content;
-        try {
-            content = await getJobFile(`${baseFilename}.out`, "result");
-        } catch (error) {
-            logger.error("Error downloading output file content, aborting. ", error);
-            res.status(500)
-                .send(error.message || "Internal Server Error");
-            return false;
-        }
-
-        const {
-            totalAtomNumber,
-            numberElectrons,
-            numberAlphaElectrons,
-            numberBetaElectrons,
-        } = extractMoleculeInput(content);
-        // Update job status with metadata
-        const metaUpdate = {};
-        if (totalAtomNumber !== null) {
-            metaUpdate.totalAtomNumber = totalAtomNumber;
-        }
-        if (numberElectrons !== null) {
-            metaUpdate.numberElectrons = numberElectrons;
-        }
-        if (numberAlphaElectrons !== null) {
-            metaUpdate.numberAlphaElectrons = numberAlphaElectrons;
-        }
-        if (numberBetaElectrons !== null) {
-            metaUpdate.numberBetaElectrons = numberBetaElectrons;
-        }
-        // Note: This assumes legacy .in files. For folder-based jobs with .xyz files,
-        // the caller should pass the full path including folder (e.g., "job_20241201120001/molecule")
-        // and the extension should match the actual file type (.xyz for new jobs, .in for legacy)
-        // TODO: Make this handler support both .in and .xyz file types
-        await updateJobMeta(`${baseFilename}.in`, "result", metaUpdate);
-
-        const {status: parseRes} = await parseSimulationOutput(baseFilename);
-        if (!parseRes) {
-            res.status(500).send("Job output parsing failed");
-            return;
-        }
-    } catch (error) {
-        logger.error("Error while post parsing", error);
-        res.status(500)
-            .send(error.message || "Internal Server Error");
-        return;
-    }
-
-    res.status(200).send("OK");
-});

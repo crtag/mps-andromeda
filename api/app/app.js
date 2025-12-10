@@ -40,10 +40,10 @@ const API = {
         ? `${EMULATOR_BASE}/deleteJob`
         : 'https://deletejob-poloq3qrtq-uc.a.run.app',
     JOBS: {
-        PENDING_RUNNING: IS_LOCAL
+        PENDING_DRAFT: IS_LOCAL
             ? `${EMULATOR_BASE}/listPendingJobs`
             : 'https://listpendingjobs-poloq3qrtq-uc.a.run.app',
-        COMPLETED: IS_LOCAL
+        COMPLETED_RUNNING: IS_LOCAL
             ? `${EMULATOR_BASE}/listCompletedJobs`
             : 'https://listcompletedjobs-poloq3qrtq-uc.a.run.app'
     },
@@ -281,7 +281,7 @@ async function uploadAllJobs() {
         
         // Upload all jobs sequentially with batch index
         const createdJobs = [];
-        let failCount = 0;
+        const errorMessages = [];
         let batchIndex = 1;
         
         for (const xyzFile of xyzFilesToUpload) {
@@ -296,7 +296,7 @@ async function uploadAllJobs() {
                 // Small delay between uploads to avoid overwhelming the server
                 await new Promise(resolve => setTimeout(resolve, 100));
             } catch (error) {
-                failCount++;
+                errorMessages.push(error.message || `Failed to upload ${xyzFile.filename}`);
                 batchIndex++; // Still increment index even on failure
                 // Continue with next file even if one fails
             }
@@ -307,19 +307,28 @@ async function uploadAllJobs() {
         elements.configStatus.textContent = 'Waiting for config file (.cfg)...';
         elements.configStatus.style.color = '#666';
         
+        // Deduplicate error messages (since jobs share config, they may have same errors)
+        const uniqueErrors = [...new Set(errorMessages)];
+        
         // Show summary with individual job messages
-        if (createdJobs.length > 0 && failCount === 0) {
+        if (createdJobs.length > 0 && errorMessages.length === 0) {
             const jobMessages = createdJobs.map(job => 
                 `Successfully created draft ${job.jobFolder}/${job.xyzFilename}`
             ).join('\n');
             showStatus(jobMessages, 'success');
-        } else if (createdJobs.length > 0 && failCount > 0) {
+        } else if (createdJobs.length > 0 && errorMessages.length > 0) {
             const jobMessages = createdJobs.map(job => 
                 `Successfully created draft ${job.jobFolder}/${job.xyzFilename}`
             ).join('\n');
-            showStatus(`${jobMessages}\n${failCount} job${failCount > 1 ? 's' : ''} failed`, 'error');
-        } else {
-            showStatus(`Failed to upload ${failCount} job${failCount > 1 ? 's' : ''}`, 'error');
+            const errorText = uniqueErrors.length < errorMessages.length 
+                ? `Failed to create ${errorMessages.length} job${errorMessages.length > 1 ? 's' : ''}\n${uniqueErrors.join('\n')}`
+                : uniqueErrors.join('\n');
+            showStatus(`${jobMessages}\n\nErrors:\n${errorText}`, 'error');
+        } else if (errorMessages.length > 0) {
+            const errorText = uniqueErrors.length < errorMessages.length 
+                ? `Failed to create ${errorMessages.length} job${errorMessages.length > 1 ? 's' : ''}\n${uniqueErrors.join('\n')}`
+                : uniqueErrors.join('\n');
+            showStatus(errorText, 'error');
         }
     } finally {
         // Always reset upload flag, even if there's an error
@@ -337,39 +346,49 @@ function resetFileState() {
 }
 
 // URL Helpers
-function getFileUrl(filename, type) {
-    return `${API.FILE}?filename=${encodeURIComponent(filename)}&type=${type}`;
+function getFileUrl(filename, type, view = false) {
+    const viewParam = view ? '&view=true' : '';
+    return `${API.FILE}?filename=${encodeURIComponent(filename)}&type=${type}${viewParam}`;
 }
 
 function getDownloadLinks(job, isComplete) {
     const baseFilename = job.filename.replace('.in', '');
     const type = isComplete ? 'result' : 'spec';
     
+    // Build file path with folder if it exists
+    const buildFilePath = (filename) => {
+        return job.jobFolder ? `${job.jobFolder}/${filename}` : filename;
+    };
+    
     const links = [];
     
     if (isComplete) {
         links.push({
-            url: getFileUrl(baseFilename + '.out', type),
-            text: 'Output'
+            url: getFileUrl(buildFilePath(baseFilename + '.out'), type),
+            text: 'Output',
+            download: baseFilename + '.out'
         });
 
         if (job?.jobSpec && job?.jobSpec.toUpperCase().includes('EXPORT=MOLDEN')) {
             links.push({
-                url: getFileUrl(baseFilename + '.molden', type),
-                text: 'Molden'
+                url: getFileUrl(buildFilePath(baseFilename + '.molden'), type),
+                text: 'Molden',
+                download: baseFilename + '.molden'
             });
         }
 
         if (job?.optimizedGeometrySaved === 'true') {
             links.push({
-                url: getFileUrl(baseFilename + '.xyz', type),
-                text: 'Optimized XYZ'
+                url: getFileUrl(buildFilePath(baseFilename + '.xyz'), type),
+                text: 'Optimized XYZ',
+                download: baseFilename + '.xyz'
             });
         }
     } else if (job.status === 'RUNNING') {
         links.push({
-            url: getFileUrl(baseFilename + '.out', 'result'), // exception for the running job
-            text: 'Pending Output'
+            url: getFileUrl(buildFilePath(baseFilename + '.out'), 'result'), // exception for the running job
+            text: 'Pending Output',
+            download: baseFilename + '.out'
         });
 
     }
@@ -380,26 +399,27 @@ function getDownloadLinks(job, isComplete) {
 // Jobs Management
 async function fetchJobs() {
     try {
-        // Fetch pending and running jobs
-        const pendingResponse = await fetch(API.JOBS.PENDING_RUNNING);
-        if (!pendingResponse.ok) throw new Error('Failed to fetch pending/running jobs');
-        const activeJobs = await pendingResponse.json();
+        // Fetch pending and draft jobs
+        const pendingResponse = await fetch(API.JOBS.PENDING_DRAFT);
+        if (!pendingResponse.ok) throw new Error('Failed to fetch pending/draft jobs');
+        const notStartedJobs = await pendingResponse.json();
         
         // Backend already deduplicates jobs, so we can use them directly
         // Separate jobs by status
-        const drafts = activeJobs.filter(job => job.status === 'DRAFT');
-        const pending = activeJobs.filter(job => job.status === 'PENDING');
-        const running = activeJobs.filter(job => job.status === 'RUNNING');
-        
+        const drafts = notStartedJobs.filter(job => job.status === 'DRAFT');
+        const pending = notStartedJobs.filter(job => job.status === 'PENDING');
         updateJobsList('draft-jobs', drafts, false, true);
         updateJobsList('pending-jobs', pending);
-        updateJobsList('running-jobs', running);
-
-        // Fetch completed jobs
-        const completedResponse = await fetch(`${API.JOBS.COMPLETED}?limit=${COMPLETED_JOBS_LIMIT}`);
-        if (!completedResponse.ok) throw new Error('Failed to fetch completed jobs');
-        const completed = await completedResponse.json();
         
+
+        // Fetch completed and running jobs
+        const resultsResponse = await fetch(`${API.JOBS.COMPLETED_RUNNING}?limit=${COMPLETED_JOBS_LIMIT}`);
+        if (!resultsResponse.ok) throw new Error('Failed to fetch completed/running jobs');
+        const jobsWithResults = await resultsResponse.json();
+        const completed = jobsWithResults.filter(job => job.status === 'COMPLETED');
+        const running = jobsWithResults.filter(job => job.status === 'RUNNING');
+
+        updateJobsList('running-jobs', running);
         updateJobsList('completed-jobs', completed, true);
     } catch (error) {
         console.error('Error fetching jobs:', error);
@@ -452,19 +472,12 @@ window.confirmJob = confirmJob;
 const deletingJobs = new Set();
 
 async function deleteJob(jobFolder, filename, skipConfirmation = false) {
-    const displayPath = `${jobFolder}/${filename}`;
-    const jobKey = `${jobFolder}/${filename}`;
-    
-    if (deletingJobs.has(jobKey)) {
-        return;
-    }
-    
+    const displayPath = `${jobFolder}/${filename}`;  
     if (!skipConfirmation && !confirm(`Are you sure you want to delete ${displayPath}?`)) {
         return;
     }
     
-    deletingJobs.add(jobKey);
-    
+    deletingJobs.add(displayPath);
     try {
         showStatus('Deleting job...', '');
         const response = await fetch(API.DELETE, {
@@ -474,10 +487,8 @@ async function deleteJob(jobFolder, filename, skipConfirmation = false) {
             },
             body: JSON.stringify({
                 jobFolder: jobFolder,
-                filename: filename
             })
         });
-
         const data = await response.json();
         
         if (!response.ok) throw new Error(data.message || 'Delete failed');
@@ -489,7 +500,7 @@ async function deleteJob(jobFolder, filename, skipConfirmation = false) {
     } catch (error) {
         showStatus(`Error deleting job: ${error.message}`, 'error');
     } finally {
-        deletingJobs.delete(jobKey);
+        deletingJobs.delete(displayPath);
     }
 }
 
@@ -513,18 +524,23 @@ function updateJobsList(sectionId, jobs, isCompleted = false, isDraft = false) {
     list.innerHTML = jobs.map(job => {
         const links = getDownloadLinks(job, isCompleted);
         const linksHtml = links.map(link => 
-            `<a href="${link.url}" download target="_blank">${link.text}</a>`
+            `<a href="${link.url}" download="${link.download || ''}" target="_blank">${link.text}</a>`
         ).join('');
 
         // Build file path for folder-based jobs
         const filePath = job.jobFolder ? `${job.jobFolder}/${job.filename}` : job.filename;
-        const fileUrl = getFileUrl(filePath, isCompleted ? 'result' : 'spec');
+        const fileUrl = getFileUrl(filePath, isCompleted ? 'result' : 'spec', true);
+        
+        // Build config file path and URL if config exists
+        const configFilePath = job?.config && job.jobFolder ? `${job.jobFolder}/${job.config}` : (job?.config || null);
+        const configFileUrl = configFilePath ? getFileUrl(configFilePath, 'spec', true) : null;
+        const configLink = configFileUrl ? `, <a href="${configFileUrl}" class="filename-link" target="_blank">${job.config}</a>` : '';
 
         return `
             <div class="job-item">
                 <div class="job-filename">
                     
-                    <a href="${fileUrl}" class="filename-link">${job.jobFolder ? `${job.jobFolder}/${job.filename}` : job.filename}</a>
+                    <a href="${fileUrl}" class="filename-link" target="_blank">${job.jobFolder ? `${job.jobFolder}/${job.filename}` : job.filename}</a>${configLink}
                     
                     ${isCompleted && job?.normalTermination ?
                         job.normalTermination === 'true' ?  
@@ -541,11 +557,12 @@ function updateJobsList(sectionId, jobs, isCompleted = false, isDraft = false) {
                 
                 <div class="job-time">
                     Status: <strong>${job.status}</strong>
+                    ${job?.tags ? `<br>Tags: <strong>${job.tags}</strong>` : ''}
                     ${job?.submitTime ? `<br>Submitted: ${new Date(job.submitTime).toLocaleString()}` : ''}    
                     ${!isCompleted && job?.startTime ? `<br>Started: ${new Date(job.startTime).toLocaleString()}` : ''}
                     ${isCompleted && job?.completionTime ? `&emsp; Completed: ${new Date(job.completionTime).toLocaleString()}` : ''}
 
-                    ${!isCompleted && job?.lastUpdate ? `<br>Last updated: ${new Date(job.lastUpdate).toLocaleString()}` : ''}
+                    ${!isCompleted && !isDraft && job.status !== 'PENDING' && job?.lastUpdate ? `<br>Last updated: ${new Date(job.lastUpdate).toLocaleString()}` : ''}
 
                     ${(!isCompleted && job?.startTime && job?.lastUpdate) ? `<br>Run duration: 
                         ${luxon.Duration
@@ -554,6 +571,17 @@ function updateJobsList(sectionId, jobs, isCompleted = false, isDraft = false) {
                     
                 </div>
 
+                ${job?.jobSpec ? 
+                    `<div class="job-spec">${job?.worker ? `${job.worker} ` : ''}${job.jobSpec}
+                        ${isCompleted ? `
+                            <button title="Copy to clipboard" class="btn-clipboard" onclick="(async () => await navigator.clipboard.writeText(\`${job.filename}, ${job.jobSpec.trim()}, ${job?.totalAtomNumber || ''}, ${job?.numberElectrons || ''}, ${job?.numberAlphaElectrons || ''}, ${job?.numberBetaElectrons || ''}, ${job?.minimizedEnergy || ''}, ${job?.totalTime || ''}\`))()">
+                                <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAACXBIWXMAAAsTAAALEwEAmpwYAAAALElEQVR4nGNgIAuknfmPF2MArIL4QBpUA9E2pSFpIGTosNEAA2RpICkCiQAAL4ZePPv+G+QAAAAASUVORK5CYII=" alt="copy">
+                            </button>
+                         `: ''
+                        }
+                    </div>` 
+                    : ''
+                }
                 ${isDraft ? `
                 <div class="job-actions">
                     <button class="btn-confirm" onclick='confirmJob(${JSON.stringify(job.jobFolder)}, ${JSON.stringify(job.filename)})'>Confirm</button>
@@ -566,18 +594,6 @@ function updateJobsList(sectionId, jobs, isCompleted = false, isDraft = false) {
                     <button class="btn-delete" onclick='deleteJob(${JSON.stringify(job.jobFolder)}, ${JSON.stringify(job.filename)})'>Delete</button>
                 </div>
                 ` : ''}
-
-                ${job?.jobSpec ? 
-                    `<div class="job-spec">${job.jobSpec}
-                        ${isCompleted ? `
-                            <button title="Copy to clipboard" class="btn-clipboard" onclick="(async () => await navigator.clipboard.writeText(\`${job.filename}, ${job.jobSpec.trim()}, ${job?.totalAtomNumber || ''}, ${job?.numberElectrons || ''}, ${job?.numberAlphaElectrons || ''}, ${job?.numberBetaElectrons || ''}, ${job?.minimizedEnergy || ''}, ${job?.totalTime || ''}\`))()">
-                                <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAACXBIWXMAAAsTAAALEwEAmpwYAAAALElEQVR4nGNgIAuknfmPF2MArIL4QBpUA9E2pSFpIGTosNEAA2RpICkCiQAAL4ZePPv+G+QAAAAASUVORK5CYII=" alt="copy">
-                            </button>
-                         `: ''
-                        }
-                    </div>` 
-                    : ''
-                }
                 <div class="job-results">
                     ${job?.totalAtomNumber ? `TOTAL ATOM NUMBER: ${job.totalAtomNumber}` : ''}
                     ${job?.numberElectrons ? `<br>NUMBER OF ELECTRONS: ${job.numberElectrons}` : ''}
@@ -588,6 +604,8 @@ function updateJobsList(sectionId, jobs, isCompleted = false, isDraft = false) {
                 </div>
 
                 <div class="job-files">${linksHtml}</div>
+
+
             </div>
         `;
     }).join('');

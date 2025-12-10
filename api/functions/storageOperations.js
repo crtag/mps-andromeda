@@ -2,7 +2,6 @@ const {logger} = require("firebase-functions");
 const {getStorage} = require("firebase-admin/storage");
 const admin = require("firebase-admin");
 const {Writable} = require("stream");
-const {extractSection, extractSimulationResults} = require("./outputOperations");
 
 // Initialize Firebase Admin if not already initialized
 if (!admin.apps.length) {
@@ -18,48 +17,31 @@ const TRAJECTORY_PREFIX = "job-trajectories/";
 const getBucket = () => storage.bucket();
 
 // Utility function to list files with a specific prefix
-async function listFilesWithQuery(prefix, matchGlob) {
-    const [files] = await getBucket().getFiles({prefix, matchGlob});
+async function listFilesWithQuery(prefix) {
+    const [files] = await getBucket().getFiles({prefix});
     return files;
 }
 
-async function listPendingJobs() {
+async function listPendingAndDraftJobs() {
     try {
-        // Look for .xyz files (new folder structure)
-        // Exclude .cfg files - they are not job files
-        const xyzFiles = await listFilesWithQuery(JOBS_PREFIX, "**.xyz");
-        // Filter to ensure only .xyz files (Firebase Storage glob may incorrectly match)
-        const files = xyzFiles.filter(f => f.name.endsWith('.xyz'));
+        const allFiles = await listFilesWithQuery(JOBS_PREFIX);
+        const files = allFiles.filter(file => file.name.endsWith('.xyz'));
 
-        const jobPromises = files.map(async (file) => {
-                const [metadata] = await file.getMetadata();
-                // Extract folder name if file is in a folder (e.g., job-specs/job_20241201120001/molecule.xyz)
-                const relativePath = file.name.replace(JOBS_PREFIX, "");
-                const pathParts = relativePath.split("/");
-                const jobFolder = pathParts.length > 1 ? pathParts[0] : null;
-                const filename = pathParts.length > 1 ? pathParts[pathParts.length - 1] : relativePath;
-                
-                // Skip config files - they should never appear as jobs
-                if (filename.toLowerCase().endsWith('.cfg')) {
-                    return null;
-                }
-                
-                const status = metadata.metadata?.status || "PENDING";
-                
-                return {
-                    ...metadata.metadata,
-                    filename: filename,
-                    jobFolder: jobFolder,
-                    fullPath: relativePath, // Keep full path for reference
-                    submitTime: metadata.timeCreated,
-                    status: status,
-                    lastUpdate: metadata.metadata?.lastUpdate,
-                };
-            });
-
-        const jobResults = await Promise.all(jobPromises);
-        // Filter out null values (filtered config files)
-        const jobs = jobResults.filter(job => job !== null);
+        const jobs = await Promise.all(files.map(async (file) => {
+            const [metadata] = await file.getMetadata();
+            const relativePath = file.name.replace(JOBS_PREFIX, "");
+            const pathParts = relativePath.split("/");
+            const jobFolder = pathParts.length > 1 ? pathParts[0] : null;
+            const filename = pathParts[pathParts.length - 1];
+            
+            return {
+                filename,
+                jobFolder,
+                jobFilePath: file.name,
+                submitTime: metadata.timeCreated,
+                ...metadata.metadata,
+            };
+        }));
         
         return jobs.sort((a, b) => new Date(a.submitTime) - new Date(b.submitTime));
     } catch (error) {
@@ -68,69 +50,69 @@ async function listPendingJobs() {
     }
 }
 
-async function listCompletedJobs(limit = 10) {
+
+async function listCompletedAndRunningJobs(limit = 10) {
     try {
-        const files = await listFilesWithQuery(RESULTS_PREFIX, "**.out");
-        logger.info(`Found ${files.length} completed jobs`);
-        const completedJobs = new Map();
+        const allFiles = await listFilesWithQuery(RESULTS_PREFIX);
 
-        files.forEach((file) => {
-            const fullName = file.name.replace(RESULTS_PREFIX, "");
-            const baseName = fullName.replace(/\.(out)$/, "");
+        // Old logic: metadata on .out file, no job folders
+        const outFiles = allFiles.filter(file => file.name.endsWith('.out'));
+        const oldJobs = await Promise.all(outFiles.map(async (file) => {
+            const [metadata] = await file.getMetadata();
+            if (!metadata.metadata?.status) return null;
 
-            // Create a new entry if encountering new baseName
-            if (!completedJobs.has(baseName)) {
-                completedJobs.set(baseName, {filename: baseName});
-            }
+            const relativePath = file.name.replace(RESULTS_PREFIX, "");
+            const pathParts = relativePath.split("/");
+            const jobFolder = pathParts.length > 1 ? pathParts[0] : null;
+            const filename = pathParts[pathParts.length - 1].replace(/\.out$/, "");
+            const baseName = relativePath.replace(/\.out$/, "");
+            
+            return {
+                filename,
+                jobFolder,
+                baseName,
+                resultFile: relativePath,
+                moldenFile: `${baseName}.molden`,
+                specFile: `${baseName}.in`,
+                submitTime: metadata.timeCreated,
+                ...metadata.metadata,
+            };
+        }));
 
-            const job = completedJobs.get(baseName);
-            job.resultFile = `${fullName}`;
-            job.moldenFile = `${baseName}.molden`;
-            job.specFile = `${baseName}.in`;
-        });
+        // New jobs: metadata on .xyz file, all job files in the job folder
+        const xyzFiles = allFiles.filter(file => file.name.endsWith('.xyz'));
+        const newJobs = await Promise.all(xyzFiles.map(async (file) => {
+            const [metadata] = await file.getMetadata();
+            if (!metadata.metadata?.status) return null; // not main xyz file
 
-        // exclude pending jobs from completed jobs
-        const pendingFiles = await listFilesWithQuery(JOBS_PREFIX);
-        pendingFiles.forEach((file) => {
-            const baseName = file.name.replace(JOBS_PREFIX, "").replace(".in", "");
-            completedJobs.delete(baseName);
-        });
+            const filename = file.name.split("/").pop();
+            const jobFolder = metadata.metadata.jobFolder;
+            
+            // Find actual files in the job folder
+            const folderFiles = allFiles.filter(f => f.name.startsWith(`${RESULTS_PREFIX}${jobFolder}/`));
+            const outFile = folderFiles.find(f => f.name.endsWith('.out'));
+            const moldenFile = folderFiles.find(f => f.name.endsWith('.molden'));
+            const cfgFile = folderFiles.find(f => f.name.endsWith('.cfg'));
+            
+            return {
+                filename,
+                jobFolder,
+                resultFile: outFile ? outFile.name.replace(RESULTS_PREFIX, "") : null,
+                moldenFile: moldenFile ? moldenFile.name.replace(RESULTS_PREFIX, "") : null,
+                specFile: cfgFile ? cfgFile.name.replace(RESULTS_PREFIX, "") : null,
+                submitTime: metadata.timeCreated,
+                ...metadata.metadata,
+            };
+        }));
 
-        // Get completion times from metadata
-        const jobPromises = Array.from(completedJobs.values()).map(async (job) => {
-            let metadata;
-            try {
-                [metadata] = await getBucket()
-                    .file(`${RESULTS_PREFIX}${job.specFile}`)
-                    .getMetadata();
-            } catch (error) {
-                logger.warn("Error getting metadata for job, missing file?", error);
-            }
-
-            if (job.filename && metadata) {
-                // add all metadata to the job object
-                job = {
-                    ...job,
-                    ...metadata.metadata,
-                };
-                return job;
-            } else {
-                logger.warn(`Job ${job.specFile} file or its metadata is missing`);
-            }
-            return null;
-        });
-
-        const jobs = await Promise.all(jobPromises);
-        return jobs
-            .filter((job) => job !== null)
-            .sort((a, b) => {
-                const timeA = new Date(a.completionTime || 0);
-                const timeB = new Date(b.completionTime || 0);
-                return timeB - timeA;
-            })
+        const allJobs = [...oldJobs, ...newJobs];
+        
+        return allJobs
+            .filter(job => job !== null)
+            .sort((a, b) => new Date(b.completionTime || 0) - new Date(a.completionTime || 0))
             .slice(0, limit);
     } catch (error) {
-        logger.error("Error listing completed jobs", error);
+        logger.error("Error listing completed/running jobs", error);
         throw error;
     }
 }
@@ -238,247 +220,122 @@ async function updateJobMeta(filename, type, metadata = {}) {
 }
 
 /**
- * Tracks normal termination status by reading the last line of .out file and updating metadata in the
- * corresponding .in file. When postScan is true, expects both files to be in RESULTS_PREFIX location,
- * indicating post execution scan; otherwise expects .in file in JOBS_PREFIX location which is the default.
- * @param {string} filename - Base filename without extension
- * @param {boolean} [postScan=false] - When true, both files are in RESULTS_PREFIX; otherwise .in file is in JOBS_PREFIX
- * @return {Promise<boolean>} Returns true if metadata was updated successfully, false if files don't exist or on error
- * @throws {Error} If filename parameter is empty or undefined
+ * Reads the ending lines from a file in cloud storage.
+ * @param {Object} file - File object from getBucket().file()
+ * @param {number} [maxBytes=128] - Maximum number of bytes to read from the end
+ * @return {Promise<string[]>} Array of non-empty trimmed lines from the end of the file
  */
-async function trackNormalTermination(filename, postScan = false) {
-    if (!filename?.trim()) {
-        throw new Error("Valid filename is required");
-    }
+async function getFileEndingLines(file, maxBytes = 128) {
+    const [stats] = await file.getMetadata();
+    const fileSize = parseInt(stats.size);
+    const readSize = Math.min(fileSize, maxBytes);
 
-    const outputFile = getBucket().file(`${RESULTS_PREFIX}${filename}.out`);
-    const inputFile = getBucket().file(`${postScan ? RESULTS_PREFIX : JOBS_PREFIX}${filename}.in`);
+    let lastFileBytes = "";
 
-    try {
-        // Verify file existence
-        const [outputExists] = await outputFile.exists();
-        const [inputExists] = await inputFile.exists();
-        if (!outputExists || !inputExists) {
-            logger.warn(`Required files not found for ${filename}`);
-            return false;
-        }
-        logger.info(`Start termination tracking for ${filename}`);
+    await new Promise((resolve, reject) => {
+        logger.info(`Will read last ${readSize} bytes out of ${fileSize} bytes total from ${file.name}`);
 
-        // Get file size for dynamic buffer sizing
-        const [stats] = await outputFile.getMetadata();
-        const fileSize = parseInt(stats.size);
-        const readSize = Math.min(fileSize, 128); // Read up to 128B from end
-
-        let lastFileBytes = "";
-
-        // Read file ending
-        await new Promise((resolve, reject) => {
-            logger.info(`Will read last ${readSize} bytes out of ${fileSize} bytes total from ${filename}.out`);
-
-            const stream = outputFile.createReadStream({
-                start: Math.max(0, fileSize - readSize),
-                end: fileSize,
-            });
-
-            const writable = new Writable({
-                write(chunk, encoding, callback) {
-                    try {
-                        logger.info(`Read ${chunk.length} bytes from ${filename}.out with [${encoding}] encoding`);
-                        const validEncoding = (typeof encoding === "string" && !["buffer", ""].includes(encoding)) ?
-                            encoding : "utf8";
-                        lastFileBytes += chunk.toString(validEncoding);
-                        callback();
-                    } catch (err) {
-                        callback(err);
-                    }
-                },
-            });
-
-            // Handle events for both streams
-            stream.on("error", (err) => {
-                logger.error(`Error reading output file ${filename}`, err);
-                reject(err);
-            });
-
-            writable.on("error", (err) => {
-                logger.error(`Error in writable stream for ${filename}`, err);
-                reject(err);
-            });
-
-            writable.on("finish", () => {
-                resolve();
-            });
-
-            // Clean up on completion or error
-            const cleanup = () => {
-                logger.info(`Finished reading ${lastFileBytes.length} bytes from ${filename}.out, cleaning up`);
-                stream.removeAllListeners();
-                writable.removeAllListeners();
-            };
-
-            writable.on("finish", cleanup);
-            writable.on("error", cleanup);
-            stream.on("error", cleanup);
-
-            logger.info(`Piping output stream for ${filename}`);
-            // Start the pipeline
-            stream.pipe(writable);
+        const stream = file.createReadStream({
+            start: Math.max(0, fileSize - readSize),
+            end: fileSize,
         });
 
-        // Process file content
-        const lines = lastFileBytes.split("\n")
-            .map((line) => line.trim())
-            .filter(Boolean);
+        const writable = new Writable({
+            write(chunk, encoding, callback) {
+                try {
+                    logger.info(`Read ${chunk.length} bytes from ${file.name} with [${encoding}] encoding`);
+                    const validEncoding = (typeof encoding === "string" && !["buffer", ""].includes(encoding)) ?
+                        encoding : "utf8";
+                    lastFileBytes += chunk.toString(validEncoding);
+                    callback();
+                } catch (err) {
+                    callback(err);
+                }
+            },
+        });
+
+        stream.on("error", (err) => {
+            logger.error(`Error reading file ${file.name}`, err);
+            reject(err);
+        });
+
+        writable.on("error", (err) => {
+            logger.error(`Error in writable stream for ${file.name}`, err);
+            reject(err);
+        });
+
+        writable.on("finish", () => {
+            resolve();
+        });
+
+        const cleanup = () => {
+            logger.info(`Finished reading ${lastFileBytes.length} bytes from ${file.name}, cleaning up`);
+            stream.removeAllListeners();
+            writable.removeAllListeners();
+        };
+
+        writable.on("finish", cleanup);
+        writable.on("error", cleanup);
+        stream.on("error", cleanup);
+
+        logger.info(`Piping output stream for ${file.name}`);
+        stream.pipe(writable);
+    });
+
+    return lastFileBytes.split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+}
+
+
+async function updateFileMeta(file, metadata = {}) {
+    const [existingMetadata] = await file.getMetadata();
+    await file.setMetadata({
+        metadata: {
+            ...(existingMetadata.metadata || {}),
+            ...metadata,
+        },
+    });
+    return true;
+}
+
+async function trackNormalTermination(jobFolderPath) {
+
+    const [files] = await getBucket().getFiles({ prefix: jobFolderPath });
+    const outputFile = files.find(f => f.name.endsWith('.out'));
+    
+    if (!outputFile) {
+        logger.warn(`No .out file found in job folder ${jobFolderPath}`);
+        return false;
+    }
+
+    try {
+        logger.info(`Start termination tracking for ${jobFolderPath}`);
+
+        const lines = await getFileEndingLines(outputFile);
 
         const lastLine = lines.length > 0 ? lines[lines.length - 1] : "";
         const normalTermination = lastLine.includes("Normal Termination");
 
-        // Update metadata
-        const [metadata] = await inputFile.getMetadata();
-        await inputFile.setMetadata({
-            metadata: {
-                ...metadata.metadata,
-                normalTermination,
-                lastOutputLine: lastLine, // Store last line for debugging
-            },
+        // Find corresponding .in file
+        const basePath = outputFile.name.replace(/\.out$/, '');
+        const inputFile = getBucket().file(`${basePath}.in`);
+
+        await updateFileMeta(inputFile, {
+            normalTermination,
+            lastOutputLine: lastLine,
         });
 
         return true;
     } catch (error) {
-        logger.error(`Failed to track termination for ${filename}`, error);
+        logger.error(`Failed to track termination for ${jobFolderPath}`, error);
         return false;
     }
 }
 
-/**
- * Parses the simulation output file and extracts the optimized geometry information.
- *
- * This function performs the following steps:
- * 1. Checks if the job terminated normally by inspecting the metadata of the input file.
- * 2. If the job did not terminate normally, it logs a warning and returns false.
- * 3. Retrieves the output file corresponding to the given filename.
- * 4. Downloads the content of the output file.
- * 5. Extracts the simulation results from the output content.
- * 6. Saves the extracted optimized geometry into a separate file with the same filename and .xyz extension.
- * 7. Updates the metadata of the input file with the extracted simulation results properties.
- *
- * @param {string} filename - The name of the simulation output file to parse.
- * @return {Promise<boolean>} - Returns true if the parsing and extraction were successful, otherwise false.
- */
-async function parseSimulationOutput(filename) {
-    // check for the normal termination
-    // if not normal termination, then job failed and nothing to extract
-    let inputFile;
+async function updateJobStatus(filePath, status, additionalMetadata = {}) {
     try {
-        inputFile = getBucket().file(`${RESULTS_PREFIX}${filename}.in`);
-    } catch (error) {
-        logger.error("Error getting input file. ", error);
-        return {
-            status: false,
-        };
-    }
-
-    let inputMetadata;
-    try {
-        [inputMetadata] = await inputFile.getMetadata();
-        if (!inputMetadata.metadata.normalTermination) {
-            logger.warn(`Job ${filename} did not terminate normally, nothing to parse.`);
-            return {
-                status: false,
-            };
-        }
-    } catch (error) {
-        logger.error("Error getting metadata for job, trying anyway with the parser. ", error);
-    }
-
-    // get the output file with the given filename
-    let outputFile;
-    try {
-        outputFile = getBucket().file(`${RESULTS_PREFIX}${filename}.out`);
-    } catch (error) {
-        logger.error("Error getting output file, can't proceed with parsing. ", error);
-        return {
-            status: false,
-        };
-    }
-
-    // download the output file content
-    let content;
-    try {
-        [content] = await outputFile.download();
-    } catch (error) {
-        logger.error("Error downloading output file content, aborting. ", error);
-        return {
-            status: false,
-        };
-    }
-
-    const outputContent = content.toString("utf8");
-    // extract the simulation results from the output content starting with
-    // ================ OPTIMIZED GEOMETRY INFORMATION ============== separator
-    const startSep = "================ OPTIMIZED GEOMETRY INFORMATION ==============";
-    const endSep = null; // no end separator, read till the end
-    const simulationResults = extractSection(outputContent, startSep, endSep, true);
-
-    const parsedResults = extractSimulationResults(simulationResults);
-
-    // save the extracted "optimizedGeometry" property into a separate file with the same filename and xyz extension
-    const optimizedGeometry = parsedResults.optimizedGeometry;
-    // unset the optimizedGeometry property from the simulation results object
-    // will track the optimized geometry in a separate file
-    // and update the metadata with the status of the optimized geometry file
-    delete parsedResults.optimizedGeometry;
-
-    let optimizedGeometrySaved = false;
-    if (!optimizedGeometry) {
-        logger.warn("No optimized geometry found in output file.");
-    } else {
-        try {
-            // create a proper xyz file with the optimized geometry
-            const atomsCount = optimizedGeometry.split("\n").length;
-            const optimizedGeometryHeader = `${atomsCount}\nEnergy=${parsedResults.minimizedEnergy}\n`;
-
-            await saveJobFile(`${filename}.xyz`, optimizedGeometryHeader + optimizedGeometry, "result", {
-                timestamp: new Date().toISOString(),
-            });
-            optimizedGeometrySaved = true;
-        } catch (error) {
-            logger.error("Error saving optimized geometry. ", error);
-        }
-    }
-
-    // update metadata with the extracted simulation results object properties
-    let refreshedMetadata;
-    try {
-        [refreshedMetadata] = await inputFile.setMetadata({
-            metadata: {
-                ...inputMetadata.metadata,
-                ...parsedResults,
-                optimizedGeometrySaved,
-            },
-        });
-    } catch (error) {
-        logger.error("Error updating metadata for input file. ", error);
-        return {
-            status: false,
-        };
-    }
-
-    return {
-        status: true,
-        metadata: refreshedMetadata.metadata,
-    };
-}
-
-async function updateJobStatus(filename, status, additionalMetadata = {}) {
-    try {
-        const fullPath = `${JOBS_PREFIX}${filename}`;
-        const file = getBucket().file(fullPath);
-        const [exists] = await file.exists();
-        if (!exists) {
-            throw new Error(`Job spec not found, [${fullPath}]`);
-        }
-
+        const file = getBucket().file(filePath);
         const [metadata] = await file.getMetadata();
         await file.setMetadata({
             metadata: {
@@ -493,25 +350,37 @@ async function updateJobStatus(filename, status, additionalMetadata = {}) {
     }
 }
 
-async function moveJobToResults(filename) {
+async function moveJobToResults(job_folder) {
     try {
-        const sourcePath = `${JOBS_PREFIX}${filename}`;
-        const sourceFile = getBucket().file(sourcePath);
+        const folderPrefix = `${JOBS_PREFIX}${job_folder}/`;
+        const [files] = await getBucket().getFiles({ prefix: folderPrefix });
+        
+        if (files.length === 0) {
+            logger.warn(`No files found in job folder ${job_folder}, may have been moved already`);
+            return true;
+        }
 
-        // Get the metadata of the source file
-        const [metadata] = await sourceFile.getMetadata();
+        logger.info(`Moving ${files.length} files from job folder ${job_folder} to results`);
 
-        // First, copy the spec file to results with the existing metadata
-        await sourceFile.copy(`${RESULTS_PREFIX}${filename}`, {
-            metadata: metadata.metadata,
-        });
+        // Copy all files to results folder with their metadata
+        await Promise.all(files.map(async (file) => {
+            const relativePath = file.name.replace(JOBS_PREFIX, "");
+            const destinationPath = `${RESULTS_PREFIX}${relativePath}`;
+            
+            const [metadata] = await file.getMetadata();
+            await file.copy(destinationPath, {
+                metadata: metadata.metadata,
+            });
+        }));
 
-        // Then delete the original
-        await sourceFile.delete();
+        // Delete all original files (this removes the folder since folders don't exist as separate entities)
+        await Promise.all(files.map(f => f.delete()));
 
+        logger.info(`Successfully moved job folder ${job_folder} to results`);
         return true;
     } catch (error) {
         logger.warn("Error moving job to results, could have been moved earlier", error);
+        throw error;
     }
 }
 
@@ -538,32 +407,15 @@ async function moveJobToTrajectory(filename) {
     }
 }
 
-async function deleteJob(fullPath) {
+async function deleteJob(jobFolder) {
     try {
-        const jobPath = `${JOBS_PREFIX}${fullPath}`;
-        const file = getBucket().file(jobPath);
-        const [exists] = await file.exists();
+        // Check both JOBS_PREFIX and RESULTS_PREFIX for the folder
+        let folderPrefix = `${JOBS_PREFIX}${jobFolder}/`;
+        let [files] = await getBucket().getFiles({ prefix: folderPrefix });
         
-        if (!exists) {
-            throw new Error(`Job not found: [${jobPath}]`);
-        }
-
-        // Check if this is a folder-based job (path contains '/')
-        const pathParts = fullPath.split('/');
-        if (pathParts.length > 1) {
-            // Folder-based job: delete all files in the folder
-            const folderPath = pathParts[0];
-            const folderPrefix = `${JOBS_PREFIX}${folderPath}/`;
-            const [files] = await getBucket().getFiles({ prefix: folderPrefix });
-            
-            logger.info(`Deleting ${files.length} files from folder ${folderPath}`);
-            await Promise.all(files.map(f => f.delete()));
-            return true;
-        } else {
-            // Legacy single file job: delete just the file
-            await file.delete();
-            return true;
-        }
+        logger.info(`Deleting ${files.length} files from folder ${jobFolder}`);
+        await Promise.all(files.map(f => f.delete()));
+        return true;
     } catch (error) {
         logger.error("Error deleting job", error);
         throw error;
@@ -571,18 +423,22 @@ async function deleteJob(fullPath) {
 }
 
 module.exports = {
-    listPendingJobs,
-    listCompletedJobs,
+    listPendingAndDraftJobs,
+    listCompletedAndRunningJobs,
     getJobFile,
     saveJobFile,
     saveJobFileInFolder,
     updateJobMeta,
+    updateFileMeta,
     updateJobStatus,
     moveJobToResults,
     moveJobToTrajectory,
     trackNormalTermination,
     parseSimulationOutput,
     deleteJob,
+    listFilesWithQuery,
+    getBucket,
+    getFileEndingLines,
     JOBS_PREFIX,
     RESULTS_PREFIX,
 };
