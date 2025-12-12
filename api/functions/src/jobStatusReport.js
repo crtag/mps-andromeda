@@ -5,28 +5,83 @@ const {
     updateFileMeta,
     getBucket,
     saveJobFile,
+    getRunningJobMetadataFile,
 } = require("../storageOperations");
 const {parseOutputFile} = require("../outputOperations");
 
-
-async function handleJobCompletionPySCF(jobFilePath) {
-    // Update status and move job spec to results, in this order
-    await updateJobStatus(jobFilePath, "ENDED", {
-        completionTime: new Date().toISOString(),
-    });
-    //TODO: implement PySCF job completion handling
+async function updateOutputFiles(jobFilePath) {
+    const jobFolderPath = jobFilePath.split("/").slice(0, -1).join("/");
+    const [jobFiles] = await getBucket().getFiles({ prefix: jobFolderPath });
+    const jobFile = jobFiles.find(f => f.name === jobFilePath);
+    
+    if (!jobFile) {
+        logger.warn(`updateOutputFiles: Job file not found for ${jobFilePath}`);
+        return;
+    }
+    
+    try {
+        const [jobFileMetadata] = await jobFile.getMetadata();
+        const inputFiles = jobFileMetadata.metadata.inputFiles 
+            ? JSON.parse(jobFileMetadata.metadata.inputFiles) 
+            : [];
+        
+        const fileList = jobFiles
+            .map(f => {
+                const relativePath = f.name.replace(jobFolderPath + '/', '');
+                return relativePath;
+            })
+            .filter(f => !inputFiles.includes(f));
+        
+        await updateFileMeta(jobFile, {
+            outputFiles: JSON.stringify(fileList),
+        });
+    } catch (error) {
+        logger.error(`Failed to update outputFiles for ${jobFolderPath}`, error);
+    }
 }
 
-async function handleJobCompletionQUICK(jobFilePath) {
-    // Update status and move job spec to results, in this order
-    await updateJobStatus(jobFilePath, "ENDED", {
-        completionTime: new Date().toISOString(),
-    });
+async function handleJobCompletionPySCF(jobFilePath, status) {
+    const jobFolderPath = jobFilePath.split("/").slice(0, -1).join("/");
+    const [jobFiles] = await getBucket().getFiles({ prefix: jobFolderPath });
+    const jobFile = jobFiles.find(f => f.name === jobFilePath);
+    const jsonFile = jobFiles.find(f => f.name.endsWith('.json'));
+    
+    try {
+        const metadata = {
+            normalTermination: (status === "ENDED"),
+        };
+
+        if (!jsonFile) {
+            logger.warn(`handleJobCompletionPySCF: No JSON file found for ${status.toLowerCase()} job ${jobFolderPath}`);
+            metadata.lastOutputLine = "Server Error. No result file found.";
+            
+        } else {
+            logger.info(`handleJobCompletionPySCF: Extracting metadata from JSON file for ${jobFolderPath}`);
+            
+            const [content] = await jsonFile.download();
+            const jsonContent = content.toString("utf8");
+            const parsedData = JSON.parse(jsonContent);
+            //ADD MORE METADATA HERE ERROR AND NORMAL
+
+            metadata.lastOutputLine = parsedData.error || null;
+        }
+        await updateFileMeta(jobFile, metadata);
+
+    } catch (error) {
+        logger.error(`Failed to extract metadata from JSON for ${jobFolderPath}`, error);
+    }
+}
+
+async function handleJobCompletionQUICK(jobFilePath, status) {
 
     const jobFolderPath = jobFilePath.split("/").slice(0, -1).join("/");
     const [jobFiles] = await getBucket().getFiles({ prefix: jobFolderPath });
     const jobFile = jobFiles.find(f => f.name === jobFilePath);
     const outputFile = jobFiles.find(f => f.name.endsWith('.out'));
+    if (!outputFile) {
+        logger.warn(`No output file found for ${status.toLowerCase()} job ${jobFolderPath}`);
+        return;
+    }
     
     try {
         logger.info(`Extracting metadata from output file for ${jobFolderPath}`);
@@ -43,28 +98,32 @@ async function handleJobCompletionQUICK(jobFilePath) {
             numberElectrons: parsedData.numberElectrons,
             numberAlphaElectrons: parsedData.numberAlphaElectrons,
             numberBetaElectrons: parsedData.numberBetaElectrons,
-            minimizedEnergy: parsedData.minimizedEnergy,
-            totalTime: parsedData.totalTime,
-            optimizedGeometrySaved: false,
         };
 
-        // Save optimized geometry XYZ if present
-        try {
-            if (!parsedData.optimizedGeometry) {
-                logger.warn("No optimized geometry found in output file.");
-            } else {
-                const baseFilename = outputFile.name.replace(/\.out$/, '').replace(/^(job-specs|job-results)\//, '');
-                const atomsCount = parsedData.optimizedGeometry.split("\n").length;
-                const optimizedGeometryHeader = `${atomsCount}\nEnergy=${parsedData.minimizedEnergy}\n`;
+        if (status === "ENDED") {
+            //TODO: implement last step geometry saving for failed jobs
+            metadata.minimizedEnergy = parsedData.minimizedEnergy;
+            metadata.totalTime = parsedData.totalTime;
+            metadata.optimizedGeometrySaved = false;
 
-                await saveJobFile(`${baseFilename}.xyz`, optimizedGeometryHeader + parsedData.optimizedGeometry, "result", {
-                    timestamp: new Date().toISOString(),
-                });
-                metadata.optimizedGeometrySaved = true;
+            try {
+                if (!parsedData.optimizedGeometry) {
+                    logger.warn("No optimized geometry found in output file.");
+                } else {
+                    const baseFilename = outputFile.name.replace(/\.out$/, '').replace(/^(job-specs|job-results)\//, '');
+                    const atomsCount = parsedData.optimizedGeometry.split("\n").length;
+                    const optimizedGeometryHeader = `${atomsCount}\nEnergy=${parsedData.minimizedEnergy}\n`;
+
+                    await saveJobFile(`${baseFilename}.xyz`, optimizedGeometryHeader + parsedData.optimizedGeometry, "result", {
+                        timestamp: new Date().toISOString(),
+                    });
+                    metadata.optimizedGeometrySaved = true;
+                }
+            } catch (error) {
+                logger.error(`Failed to save optimized geometry for ${jobFolderPath}`, error);
             }
-        } catch (error) {
-            logger.error(`Failed to parse simulation output for ${jobFolderPath}`, error);
         }
+
         await updateFileMeta(jobFile, metadata);
 
     } catch (error) {
@@ -72,67 +131,57 @@ async function handleJobCompletionQUICK(jobFilePath) {
     }
 }
 
-async function handleJobFailurePySCF(jobFilePath) {
-    // Update status and move job spec to results, in this order
-    await updateJobStatus(jobFilePath, "FAILED", {
-        completionTime: new Date().toISOString(),
-    });
-    //TODO: implement PySCF job failure handling
-}
-
-async function handleJobFailureQUICK(jobFilePath) {
-    // Update status and move job spec to results, in this order
-    await updateJobStatus(jobFilePath, "FAILED", {
-        completionTime: new Date().toISOString(),
-    });
-}
-
-
 exports.handler = onRequest(async (req, res) => {
     if (req.method !== "POST") {
+        logger.error("JobStatusReport.handler: Method Not Allowed");
         res.status(405).send("Method Not Allowed");
         return;
     }
 
     const payload = req.body;
     const worker = req.query.worker;
-    if (payload.jobstatusfilepath === undefined || payload.status === undefined) {
+    if (payload.job_folder === undefined || payload.status === undefined) {
+        logger.error("JobStatusReport.handler: Bad payload format");
         res.status(400).send("Bad payload format");
         return;
     }
     if (worker === undefined) {
+        logger.error("JobStatusReport.handler: Worker is required");
         res.status(400).send("Worker is required");
         return;
     }
 
-
+    const jobFolder = payload.job_folder;
+    
     // Log the operation
-    logger.info("Processing job status report", {
-        jobStatusFilePath: payload.jobstatusfilepath,
+    logger.info("JobStatusReport.handler: Processing job status report", {
+        jobFolder: jobFolder,
         status: payload.status,
         worker: worker,
     });
 
-    try {
-        // Update job status timestamp - always pass full file path
-        await updateJobStatus(payload.jobstatusfilepath, payload.status, {
-            lastUpdate: new Date().toISOString(),
-        });
 
-        // Handle job completion
-        if (payload.status === "ENDED") {
+    const cfgFile = await getRunningJobMetadataFile(jobFolder);
+    const jobsMetadatafilepath = cfgFile.name;
+    
+    try {
+        // Update outputFiles on every status update
+        await updateOutputFiles(jobsMetadatafilepath);
+        
+        // Handle job completion or failure
+        if (payload.status === "ENDED" || payload.status === "FAILED") {
+            await updateJobStatus(jobsMetadatafilepath, payload.status, {
+                completionTime: new Date().toISOString(),
+            });
             if (worker === "PySCF") {
-                await handleJobCompletionPySCF(payload.jobstatusfilepath);
+                await handleJobCompletionPySCF(jobsMetadatafilepath, payload.status);
             } else if (worker === "QUICK") {
-                await handleJobCompletionQUICK(payload.jobstatusfilepath);
+                await handleJobCompletionQUICK(jobsMetadatafilepath, payload.status);
             } 
-        } else if (payload.status === "FAILED") {
-            if (worker === "PySCF") {
-                await handleJobFailurePySCF(payload.jobstatusfilepath);
-            } else if (worker === "QUICK") {
-                await handleJobFailureQUICK(payload.jobstatusfilepath);
-            } 
-        } 
+        } else {
+            //just update last updated time, nothing else to update
+            await updateJobStatus(jobsMetadatafilepath, "RUNNING", {});
+        }
 
         res.status(204).send();
     } catch (error) {

@@ -1,5 +1,5 @@
 // ============================================
-// UPLOAD MODULE
+// EXPERIMENTAL UPLOAD MODULE - For design testing
 // Handles file upload, drag-and-drop, and job creation
 // ============================================
 
@@ -290,14 +290,14 @@ const UploadModule = (function() {
             fileName.textContent = file.filename;
             fileName.style.flex = '1';
             fileName.style.color = textColor;
-            if (fileState.config && !file.isExpected) {
-                fileName.classList.add('file-scratch');
-            }
             
             const removeBtn = document.createElement('button');
-            removeBtn.className = 'btn-clipboard';
-            removeBtn.title = 'Remove file';
-            removeBtn.innerHTML = '<img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTIgNEw0IDEyTTQgNEwxMiAxMiIgc3Ryb2tlPSIjMDA2NmNjIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PC9zdmc+" alt="delete">';
+            removeBtn.innerHTML = '🗑️';
+            removeBtn.style.background = 'none';
+            removeBtn.style.border = 'none';
+            removeBtn.style.cursor = 'pointer';
+            removeBtn.style.padding = '2px 6px';
+            removeBtn.style.fontSize = '14px';
             removeBtn.onclick = () => removeFile(file.filename);
             
             fileItem.appendChild(fileName);
@@ -435,7 +435,7 @@ const UploadModule = (function() {
                 throw new Error(data.message || 'Upload failed');
             }
             
-            showStatus(`Successfully created job ${data.jobFolder}`, 'success');
+            showStatus(`Successfully created draft ${data.jobFolder}/${data.xyzFilename}`, 'success');
             
             resetFiles();
             fetchJobs();

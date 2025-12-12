@@ -54,6 +54,9 @@ console.log('API URLs configured:', API);
 const REFRESH_INTERVAL = 300000; // 300 seconds
 const COMPLETED_JOBS_LIMIT = 75;
 
+// File extensions that should be viewed (not downloaded)
+const VIEW_FILE_EXTENSIONS = ['xyz', 'cfg', 'log', 'out', 'json'];
+
 // DOM Elements
 const elements = {
     completedJobsSubtitle: null,
@@ -82,56 +85,83 @@ function getFileUrl(filename, type, view = false) {
     return `${API.FILE}?filename=${encodeURIComponent(filename)}&type=${type}${viewParam}`;
 }
 
+function shouldViewFile(filename) {
+    const extension = filename.split('.').pop()?.toLowerCase();
+    return VIEW_FILE_EXTENSIONS.includes(extension);
+}
+
 function getDownloadLinks(job, isComplete) {
     const baseFilename = job.filename.replace('.in', '');
     const type = isComplete ? 'result' : 'spec';
     
-    const oldStuff =!job.jobFolder;
-    const links = [];
+    const oldStuff = !job.jobFolder;
+    const inputLinks = [];
+    const outputLinks = [];
 
     if (oldStuff) {
         if (isComplete) {
-            links.push({
-                url: getFileUrl(baseFilename + '.out', type),
+            const outFilename = baseFilename + '.out';
+            const viewOut = shouldViewFile(outFilename);
+            outputLinks.push({
+                url: getFileUrl(outFilename, type, viewOut),
                 text: 'Output',
-                download: baseFilename + '.out'
+                download: viewOut ? null : outFilename
             });
             if (job?.jobSpec && job?.jobSpec.toUpperCase().includes('EXPORT=MOLDEN')) {
-                links.push({
-                    url: getFileUrl(baseFilename + '.molden', type),
+                const moldenFilename = baseFilename + '.molden';
+                const viewMolden = shouldViewFile(moldenFilename);
+                outputLinks.push({
+                    url: getFileUrl(moldenFilename, type, viewMolden),
                     text: 'Molden',
-                    download: baseFilename + '.molden'
+                    download: viewMolden ? null : moldenFilename
                 });
             }
             if (job?.optimizedGeometrySaved === 'true') {
-                links.push({
-                    url: getFileUrl(baseFilename + '.xyz', type),
+                const xyzFilename = baseFilename + '.xyz';
+                const viewXyz = shouldViewFile(xyzFilename);
+                outputLinks.push({
+                    url: getFileUrl(xyzFilename, type, viewXyz),
                     text: 'Optimized XYZ',
-                    download: baseFilename + '.xyz'
+                    download: viewXyz ? null : xyzFilename
                 });
             }
         } else if (job.status === 'RUNNING') {
-            links.push({
-                url: getFileUrl(baseFilename + '.out', 'result'), // exception for the running job
+            const outFilename = baseFilename + '.out';
+            const viewOut = shouldViewFile(outFilename);
+            outputLinks.push({
+                url: getFileUrl(outFilename, 'result', viewOut),
                 text: 'Pending Output',
-                download: baseFilename + '.out'
+                download: viewOut ? null : outFilename
             });
         }
     } else {
-        if (job.jobFiles && Array.isArray(job.jobFiles)) {
-            job.jobFiles.forEach(filename => {
+        if (job.inputFiles && Array.isArray(job.inputFiles)) {
+            job.inputFiles.forEach(filename => {
                 const filePath = job.jobFolder ? `${job.jobFolder}/${filename}` : filename;
                 const fileType = isComplete ? 'result' : 'spec';
-                links.push({
-                    url: getFileUrl(filePath, fileType),
+                const view = shouldViewFile(filename);
+                inputLinks.push({
+                    url: getFileUrl(filePath, fileType, view),
                     text: filename,
-                    download: filename
+                    download: view ? null : filename
+                });
+            });
+        }
+        if (job.outputFiles && Array.isArray(job.outputFiles)) {
+            job.outputFiles.forEach(filename => {
+                const filePath = job.jobFolder ? `${job.jobFolder}/${filename}` : filename;
+                const fileType = 'result';
+                const view = shouldViewFile(filename);
+                outputLinks.push({
+                    url: getFileUrl(filePath, fileType, view),
+                    text: filename,
+                    download: view ? null : filename
                 });
             });
         }
     }
 
-    return links;
+    return { inputLinks, outputLinks };
 }
 
 // Jobs Management
@@ -214,27 +244,22 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
     }
 
     list.innerHTML = jobs.map(job => {
-        const links = getDownloadLinks(job, isCompleted);
-        const linksHtml = links.map(link => 
-            `<a href="${link.url}" download="${link.download || ''}" target="_blank">${link.text}</a>`
+        const { inputLinks, outputLinks } = getDownloadLinks(job, isCompleted);
+        const inputLinksHtml = inputLinks.map(link => 
+            link.download 
+                ? `<a href="${link.url}" download="${link.download}" target="_blank">${link.text}</a>`
+                : `<a href="${link.url}" target="_blank">${link.text}</a>`
         ).join('');
-
-        // Build file paths - job.filename is now the config filename, job.xyz is the xyz filename
-        const xyzFilename = job?.xyz || job.filename; // Use xyz from metadata, fallback to filename for old jobs
-        const xyzFilePath = job.jobFolder ? `${job.jobFolder}/${xyzFilename}` : xyzFilename;
-        const xyzFileUrl = getFileUrl(xyzFilePath, isCompleted ? 'result' : 'spec', true);
-        const xyzLink = `<a href="${xyzFileUrl}" class="filename-link" target="_blank"> ${xyzFilename}</a>`;
-        
-        // Build config file path and URL (job.filename is now the config filename)
-        const configFilePath = job.jobFolder ? `${job.jobFolder}/${job.filename}` : job.filename;
-        const configFileUrl = getFileUrl(configFilePath, isCompleted ? 'result' : 'spec', true);
-        const configLink = `<a href="${configFileUrl}" class="filename-link" target="_blank">${job.filename}</a>`;
+        const outputLinksHtml = outputLinks.map(link => 
+            link.download 
+                ? `<a href="${link.url}" download="${link.download}" target="_blank">${link.text}</a>`
+                : `<a href="${link.url}" target="_blank">${link.text}</a>`
+        ).join('');
 
         return `
             <div class="job-item">
                 <div class="job-filename">
-                    
-                ${job.jobFolder? job.jobFolder:''} ${xyzLink}, ${configLink}
+                    ${job.jobFolder ? job.jobFolder : ''}
                     
                     ${isCompleted && job?.normalTermination ?
                         job.normalTermination === 'true' ?  
@@ -248,6 +273,8 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
                             `<div class="error-termination-reason">Unknown Termination Reason.</div>` : ''
                     }
                 </div>
+                
+                ${inputLinksHtml ? `<div class="job-files">${inputLinksHtml}</div>` : ''}
                 
                 <div class="job-time">
                     Status: <strong>${job.status}</strong>
@@ -292,7 +319,7 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
                     ${job?.totalTime ? `<br>TOTAL TIME: ${job.totalTime}` : ''}
                 </div>
 
-                <div class="job-files">${linksHtml}</div>
+                ${outputLinksHtml ? `<div class="job-files">${outputLinksHtml}</div>` : ''}
 
 
             </div>

@@ -20,7 +20,7 @@ const getBucket = () => {
     const reset = '\x1b[0m'; // Resets color to default
 
     if ('true' === process.env.FUNCTIONS_EMULATOR) {
-        console.log(green + "Using dev storage bucket: mps-andromeda-dev.appspot.com" + reset);
+        // console.log(green + "Using dev storage bucket: mps-andromeda-dev" + reset);
         // dealing with the dev environment
         const bucketName = "mps-andromeda-dev";
         return storage.bucket(bucketName);
@@ -35,10 +35,27 @@ async function listFilesWithQuery(prefix) {
     return files;
 }
 
+async function jobFolderExists(folderName) {
+    try {
+        const jobsPrefix = `${JOBS_PREFIX}${folderName}/`;
+        const resultsPrefix = `${RESULTS_PREFIX}${folderName}/`;
+        
+        const [[jobsFiles], [resultsFiles]] = await Promise.all([
+            getBucket().getFiles({prefix: jobsPrefix, maxResults: 1}),
+            getBucket().getFiles({prefix: resultsPrefix, maxResults: 1})
+        ]);
+        
+        return jobsFiles.length > 0 || resultsFiles.length > 0;
+    } catch (error) {
+        logger.error(`Error checking if job folder exists: ${folderName}`, error);
+        return false;
+    }
+}
+
 async function listPendingAndDraftJobs() {
     try {
         const allFiles = await listFilesWithQuery(JOBS_PREFIX);
-        const files = allFiles.filter(file => file.name.endsWith('.xyz'));
+        const files = allFiles.filter(file => file.name.endsWith('.cfg'));
 
         const jobs = await Promise.all(files.map(async (file) => {
             const [metadata] = await file.getMetadata();
@@ -47,16 +64,28 @@ async function listPendingAndDraftJobs() {
             const jobFolder = pathParts.length > 1 ? pathParts[0] : null;
             const filename = pathParts[pathParts.length - 1];
             
+            const jobMetadata = {...metadata.metadata};
+            if (jobMetadata.inputFiles) {
+                try {
+                    jobMetadata.inputFiles = JSON.parse(jobMetadata.inputFiles);
+                } catch (e) {
+                    logger.warn(`Failed to parse inputFiles for ${jobFolder || filename}`, e);
+                    jobMetadata.inputFiles = [];
+                }
+            }
+            
             return {
                 filename,
                 jobFolder,
                 jobFilePath: file.name,
                 submitTime: metadata.timeCreated,
-                ...metadata.metadata,
+                ...jobMetadata,
             };
         }));
+
+        console.log('found jobs:', jobs.length);
         
-        return jobs.sort((a, b) => new Date(a.submitTime) - new Date(b.submitTime));
+        return jobs.sort((a, b) => new Date(b.submitTime) - new Date(a.submitTime));
     } catch (error) {
         logger.error("Error listing pending jobs", error);
         throw error;
@@ -80,6 +109,9 @@ async function listCompletedAndRunningJobs(limit = 10) {
             const filename = pathParts[pathParts.length - 1].replace(/\.out$/, "");
             const baseName = relativePath.replace(/\.out$/, "");
             
+            const jobMetadata = {...metadata.metadata};
+
+            
             return {
                 filename,
                 jobFolder,
@@ -88,15 +120,15 @@ async function listCompletedAndRunningJobs(limit = 10) {
                 moldenFile: `${baseName}.molden`,
                 specFile: `${baseName}.in`,
                 submitTime: metadata.timeCreated,
-                ...metadata.metadata,
+                ...jobMetadata,
             };
         }));
 
-        // New jobs: metadata on .xyz file, all job files in the job folder
-        const xyzFiles = allFiles.filter(file => file.name.endsWith('.xyz'));
-        const newJobs = await Promise.all(xyzFiles.map(async (file) => {
+        // New jobs: metadata on .cfg file, all job files in the job folder
+        const cfgFiles = allFiles.filter(file => file.name.endsWith('.cfg'));
+        const newJobs = await Promise.all(cfgFiles.map(async (file) => {
             const [metadata] = await file.getMetadata();
-            if (!metadata.metadata?.status) return null; // not main xyz file
+            if (!metadata.metadata?.status) return null; // not main config file
 
             const filename = file.name.split("/").pop();
             const jobFolder = metadata.metadata.jobFolder;
@@ -107,6 +139,25 @@ async function listCompletedAndRunningJobs(limit = 10) {
             const moldenFile = folderFiles.find(f => f.name.endsWith('.molden'));
             const cfgFile = folderFiles.find(f => f.name.endsWith('.cfg'));
             
+            // Parse outputFiles JSON string back to array if it exists
+            const jobMetadata = {...metadata.metadata};
+            if (jobMetadata.outputFiles) {
+                try {
+                    jobMetadata.outputFiles = JSON.parse(jobMetadata.outputFiles);
+                } catch (e) {
+                    logger.warn(`Failed to parse outputFiles for ${jobFolder}`, e);
+                    jobMetadata.outputFiles = [];
+                }
+            }
+            if (jobMetadata.inputFiles) {
+                try {
+                    jobMetadata.inputFiles = JSON.parse(jobMetadata.inputFiles);
+                } catch (e) {
+                    logger.warn(`Failed to parse inputFiles for ${jobFolder}`, e);
+                    jobMetadata.inputFiles = [];
+                }
+            }
+            
             return {
                 filename,
                 jobFolder,
@@ -114,7 +165,7 @@ async function listCompletedAndRunningJobs(limit = 10) {
                 moldenFile: moldenFile ? moldenFile.name.replace(RESULTS_PREFIX, "") : null,
                 specFile: cfgFile ? cfgFile.name.replace(RESULTS_PREFIX, "") : null,
                 submitTime: metadata.timeCreated,
-                ...metadata.metadata,
+                ...jobMetadata,
             };
         }));
 
@@ -363,6 +414,11 @@ async function updateJobStatus(filePath, status, additionalMetadata = {}) {
     }
 }
 
+async function getRunningJobMetadataFile(folderPath) {
+    const [jobFiles] = await getBucket().getFiles({ prefix: `${RESULTS_PREFIX}${folderPath}/` });
+    return jobFiles.find(f => f.name.endsWith('.cfg'));
+}
+
 async function moveJobToResults(job_folder) {
     try {
         const folderPrefix = `${JOBS_PREFIX}${job_folder}/`;
@@ -444,14 +500,15 @@ module.exports = {
     updateJobMeta,
     updateFileMeta,
     updateJobStatus,
+    getRunningJobMetadataFile,
     moveJobToResults,
     moveJobToTrajectory,
     trackNormalTermination,
-    parseSimulationOutput,
     deleteJob,
     listFilesWithQuery,
     getBucket,
     getFileEndingLines,
+    jobFolderExists,
     JOBS_PREFIX,
     RESULTS_PREFIX,
 };

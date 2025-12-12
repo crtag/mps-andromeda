@@ -268,10 +268,12 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
             jobSpec = configData.spec || null;
         } else if (worker === "PySCF") {
             const parts = [];
-            if (configData.functional) parts.push(`FUNCTIONAL=${configData.functional}`);
-            if (configData.basis) parts.push(`BASIS=${configData.basis}`);
-            if (configData.task) parts.push(`TASK=${configData.task}`);
-            jobSpec = parts.length > 0 ? parts.join(", ") : null;
+            if (configData?.task) parts.push(configData.task);
+            if (configData?.functional) parts.push(configData.functional);
+            if (configData?.basis) parts.push(configData.basis);
+            parts.push(`CHARGE=${configData?.charge ?? 0}`);
+            parts.push(`MULTIPLICITY=${configData?.multiplicity ?? 1}`);
+            jobSpec = parts.length > 0 ? parts.join(" ") : null;
         }
         
         // Parse XYZ to extract geometry info
@@ -308,6 +310,9 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
         const originalConfigFilename = configFilename;
         const originalXyzFilename = xyzFilename;
 
+        // Collect all uploaded filenames
+        const inputFiles = [originalConfigFilename, ...Object.keys(files)];
+
         // Create metadata for config file (main job file)
         const metadata = {
             status: "PENDING",
@@ -319,6 +324,7 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
             atomCount: atomCount,
             description: req.body.description || "",
             jobFolder: jobFolderName, // Store folder name in metadata
+            inputFiles: JSON.stringify(inputFiles), // List of all uploaded files
         };
 
         if (dryRun) {

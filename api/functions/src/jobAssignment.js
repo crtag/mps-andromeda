@@ -38,6 +38,7 @@ async function getNextJobToRun(workerType) {
 }
 
 exports.handler = onRequest({cors: true}, async (req, res) => {
+    logger.info("jobAssignment.handler");
     if (req.method !== "GET") {
         res.status(405).send("Method Not Allowed");
         return;

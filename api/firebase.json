@@ -19,7 +19,7 @@
   },
   "emulators": {
     "functions": {
-      "port": 5002
+      "port": 5001
     },
     "storage": {
       "port": 9199,
