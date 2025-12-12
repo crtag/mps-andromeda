@@ -6,11 +6,8 @@ const {
     listPendingAndDraftJobs,
     listCompletedAndRunningJobs,
     getJobFile,
-    trackNormalTermination,
-    parseSimulationOutput,
-    updateJobMeta,
     deleteJob,
-    RESULTS_PREFIX,
+    jobFolderExists,
     JOBS_PREFIX,
 } = require("../storageOperations");
 const {extractMoleculeInput} = require("../outputOperations");
@@ -182,7 +179,8 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
     // see if dry run is indicated in query string via dryRun=true
     const dryRun = req.query?.dryRun === "true";
 
-    let configContent, xyzContent;
+    let configContent;
+    const files = {}; // Store decoded file contents by filename
 
     try {
         // Decode config file
@@ -192,11 +190,24 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
             configContent = configContent.replace(/\r\n/g, "\n");
         }
         
-        // Decode xyz file
-        if (req.body.xyzContent) {
-            xyzContent = atob(req.body.xyzContent);
-            xyzContent = xyzContent.trim();
-            xyzContent = xyzContent.replace(/\r\n/g, "\n");
+        // Decode all other files
+        if (req.body.files && Array.isArray(req.body.files)) {
+            for (const file of req.body.files) {
+                if (file.filename && file.content) {
+                    try {
+                        let decodedContent = atob(file.content);
+                        // Only trim/replace newlines for text files (XYZ, etc.)
+                        if (file.filename.toLowerCase().endsWith('.xyz') || 
+                            file.filename.toLowerCase().endsWith('.cfg')) {
+                            decodedContent = decodedContent.trim();
+                            decodedContent = decodedContent.replace(/\r\n/g, "\n");
+                        }
+                        files[file.filename] = decodedContent;
+                    } catch (error) {
+                        logger.warn(`Failed to decode file ${file.filename}:`, error);
+                    }
+                }
+            }
         }
     } catch (error) {
         logger.error("Error decoding file content. Expected base64 encoding.", error);
@@ -209,14 +220,21 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
 
     try {
         const configFilename = req.body.configFilename;
-        const xyzFilename = req.body.xyzFilename;
         const batchTimestamp = req.body.batchTimestamp; // Shared timestamp for batch
         const batchIndex = req.body.batchIndex || "01"; // Index in batch (01, 02, etc.)
 
-        if (!configContent || !xyzContent || !configFilename || !xyzFilename) {
-            res.status(400).send("Config and XYZ content and filenames are required");
+        if (!configContent || !configFilename) {
+            res.status(400).send("Config content and filename are required");
             return;
         }
+        
+        // Find XYZ file (required for job creation)
+        const xyzFilename = Object.keys(files).find(f => f.toLowerCase().endsWith('.xyz'));
+        if (!xyzFilename) {
+            res.status(400).send("XYZ file is required");
+            return;
+        }
+        const xyzContent = files[xyzFilename];
 
         // Parse config to extract settings
         const configData = parseConfigFile(configContent);
@@ -265,21 +283,36 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
             .replace(/[^0-9]/g, "") // Remove non-digits
             .slice(0, 12); // Take first 12 digits
         
-        // Ensure batchIndex is 2 digits
-        const index = batchIndex.toString().padStart(2, "0");
-        const jobFolderName = `job_${timestamp}${index}`;
+        // Start with provided batchIndex or 01
+        let counter = parseInt(batchIndex) || 1;
+        let jobFolderName;
+        let exists = true;
         
-        logger.info(`Creating job folder: ${jobFolderName} (batchTimestamp: ${batchTimestamp}, batchIndex: ${batchIndex}, index: ${index})`);
+        // Increment counter until we find an available folder name
+        while (exists) {
+            const index = counter.toString().padStart(2, "0");
+            jobFolderName = `job_${timestamp}${index}`;
+            exists = await jobFolderExists(jobFolderName);
+            if (exists) {
+                logger.info(`Job folder ${jobFolderName} already exists, incrementing counter`);
+                counter++;
+                if (counter > 99) {
+                    throw new Error("Cannot find available job folder name (counter exceeded 99)");
+                }
+            }
+        }
+        
+        logger.info(`Creating job folder: ${jobFolderName} (batchTimestamp: ${batchTimestamp}, batchIndex: ${batchIndex}, final counter: ${counter})`);
 
         // Use original filenames inside the folder
         const originalConfigFilename = configFilename;
         const originalXyzFilename = xyzFilename;
 
-        // Create metadata for XYZ file (main job file)
+        // Create metadata for config file (main job file)
         const metadata = {
-            status: "DRAFT",
+            status: "PENDING",
             submitTime: new Date().toISOString(),
-            config: originalConfigFilename, // Reference to config file (original name)
+            xyz: originalXyzFilename, // Reference to xyz file (original name)
             worker: worker, // Worker type extracted from config
             tags: tags, // Tags extracted from config
             jobSpec: jobSpec, // Job specifications (SPEC for QUICK, FUNCTIONAL BASIS TASK for PySCF)
@@ -303,14 +336,17 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
         // Import saveJobFileInFolder
         const { saveJobFileInFolder } = require("../storageOperations");
 
-        // Save config file copy with original name inside folder
-        await saveJobFileInFolder(jobFolderName, originalConfigFilename, configContent, {
-            type: "config",
-            timestamp: new Date().toISOString(),
-        });
+        // Save config file copy with original name inside folder (main job file with metadata)
+        await saveJobFileInFolder(jobFolderName, originalConfigFilename, configContent, metadata);
 
-        // Save XYZ file with original name inside folder (main job file)
-        await saveJobFileInFolder(jobFolderName, originalXyzFilename, xyzContent, metadata);
+        // Save all other files (XYZ, CHK, etc.)
+        for (const [filename, content] of Object.entries(files)) {
+            if (filename !== originalConfigFilename) {
+                await saveJobFileInFolder(jobFolderName, filename, content, {
+                    timestamp: new Date().toISOString(),
+                });
+            }
+        }
 
         res.status(200).json({
             success: true,
@@ -345,14 +381,12 @@ exports.confirmJobHandler = onRequest({cors: true}, async (req, res) => {
             return;
         }
 
-        // Construct the full path to the XYZ file
-        const fullPath = `${JOBS_PREFIX}${jobFolder}/${filename}`;
+        // Construct the full path to the config file
+        const configFilePath = `${JOBS_PREFIX}${jobFolder}/${filename}`;
         
-        // Update job status from DRAFT to PENDING
+        // Update job status from DRAFT to PENDING on config file
         const { updateJobStatus } = require("../storageOperations");
-        await updateJobStatus(fullPath, "PENDING", {
-            confirmedTime: new Date().toISOString(),
-        });
+        await updateJobStatus(configFilePath, "PENDING", {});
 
         res.status(200).json({
             success: true,

@@ -465,3 +465,7 @@ textarea {
     border-radius: 4px;
     resize: vertical;
 }
+
+.file-scratch {
+    text-decoration: line-through;
+}
