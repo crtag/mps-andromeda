@@ -58,7 +58,7 @@ const REFRESH_INTERVAL = 300000; // 300 seconds
 const COMPLETED_JOBS_LIMIT = 75;
 
 // File extensions that should be viewed (not downloaded)
-const VIEW_FILE_EXTENSIONS = ['xyz', 'cfg', 'log', 'out', 'json'];
+const VIEW_FILE_EXTENSIONS = ['xyz', 'cfg', 'log', 'out', 'json', 'in'];
 
 // DOM Elements
 const elements = {
@@ -102,6 +102,15 @@ function getDownloadLinks(job, isComplete) {
     const outputLinks = [];
 
     if (oldStuff) {
+        // Always show .in file link for legacy jobs (first row)
+        const inFilename = baseFilename + '.in';
+        const viewIn = shouldViewFile(inFilename);
+        inputLinks.push({
+            url: getFileUrl(inFilename, 'result', viewIn),
+            text: inFilename,
+            download: viewIn ? null : inFilename
+        });
+        
         if (isComplete) {
             const outFilename = baseFilename + '.out';
             const viewOut = shouldViewFile(outFilename);
@@ -248,6 +257,12 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
 
     list.innerHTML = jobs.map(job => {
         const { inputLinks, outputLinks } = getDownloadLinks(job, isCompleted);
+        
+        // For legacy jobs, extract .in file link to show before "successful run"
+        const legacyJobInLink = !job.jobFolder && isCompleted && inputLinks.length > 0 
+            ? inputLinks[0] 
+            : null;
+        
         const inputLinksHtml = inputLinks.map(link => 
             link.download 
                 ? `<a href="${link.url}" download="${link.download}" target="_blank">${link.text}</a>`
@@ -267,7 +282,9 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
                             <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTUgMTlIMTkiIHN0cm9rZT0iIzAwNjZjYyIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPHBhdGggZD0iTTUgMTlWMTciIHN0cm9rZT0iIzAwNjZjYyIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPHBhdGggZD0iTTE5IDE5VjE3IiBzdHJva2U9IiMwMDY2Y2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CjxwYXRoIGQ9Ik0xMiA4VjE2IiBzdHJva2U9IiMwMDY2Y2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CjxwYXRoIGQ9Ik05IDEzTDEyIDE2TDE1IDEzIiBzdHJva2U9IiMwMDY2Y2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPg==" alt="download">
                         </a>
                     ` : ''}
-                    ${job.jobFolder ? job.jobFolder : ''}
+                    ${legacyJobInLink ? `
+                        <a href="${legacyJobInLink.url}" ${legacyJobInLink.download ? `download="${legacyJobInLink.download}"` : ''} target="_blank">${legacyJobInLink.text}</a>
+                    ` : (job.jobFolder ? job.jobFolder : '')}
                     
                     ${isCompleted && job?.normalTermination ?
                         job.normalTermination === 'true' ?  

@@ -97,28 +97,40 @@ async function listCompletedAndRunningJobs(limit = 10) {
     try {
         const allFiles = await listFilesWithQuery(RESULTS_PREFIX);
 
-        // Old logic: metadata on .out file, no job folders
-        const outFiles = allFiles.filter(file => file.name.endsWith('.out'));
-        const oldJobs = await Promise.all(outFiles.map(async (file) => {
-            const [metadata] = await file.getMetadata();
-            if (!metadata.metadata?.status) return null;
-
+        // Old logic: metadata on .in file, no job folders (legacy unfolder jobs)
+        const inFiles = allFiles.filter(file => {
             const relativePath = file.name.replace(RESULTS_PREFIX, "");
             const pathParts = relativePath.split("/");
-            const jobFolder = pathParts.length > 1 ? pathParts[0] : null;
-            const filename = pathParts[pathParts.length - 1].replace(/\.out$/, "");
-            const baseName = relativePath.replace(/\.out$/, "");
+            // Only include unfoldered files (no folder structure)
+            return pathParts.length === 1 && file.name.endsWith('.in');
+        });
+        
+        const oldJobs = await Promise.all(inFiles.map(async (file) => {
+            const [metadata] = await file.getMetadata();
             
+            const relativePath = file.name.replace(RESULTS_PREFIX, "");
+            const filename = relativePath.replace(/\.in$/, "");
+            const baseName = relativePath.replace(/\.in$/, "");
+            
+            // Check if corresponding .out file exists
+            const outFile = allFiles.find(f => f.name === `${RESULTS_PREFIX}${baseName}.out`);
+            const resultFile = outFile ? `${baseName}.out` : null;
+            
+            // Legacy unfolder jobs might not have status metadata
+            // If no status, assume ENDED for legacy jobs (they wouldn't be in results if not completed)
             const jobMetadata = {...metadata.metadata};
-
+            if (!jobMetadata.status) {
+                logger.info(`Legacy unfolder job ${filename} (.in) has no status metadata, defaulting to ENDED`);
+                jobMetadata.status = 'ENDED';
+            }
             
             return {
                 filename,
-                jobFolder,
+                jobFolder: null,
                 baseName,
-                resultFile: relativePath,
+                resultFile,
                 moldenFile: `${baseName}.molden`,
-                specFile: `${baseName}.in`,
+                specFile: relativePath,
                 submitTime: metadata.timeCreated,
                 ...jobMetadata,
             };
