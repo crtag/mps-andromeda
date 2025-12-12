@@ -2,6 +2,7 @@ const {onRequest} = require("firebase-functions/v2/https");
 const {logger} = require("firebase-functions");
 const fs = require("fs");
 const path = require("path");
+const archiver = require("archiver");
 const {
     listPendingAndDraftJobs,
     listCompletedAndRunningJobs,
@@ -9,6 +10,8 @@ const {
     deleteJob,
     jobFolderExists,
     JOBS_PREFIX,
+    RESULTS_PREFIX,
+    getBucket,
 } = require("../storageOperations");
 const {extractMoleculeInput} = require("../outputOperations");
 
@@ -430,6 +433,74 @@ exports.deleteJobHandler = onRequest({cors: true}, async (req, res) => {
             success: false,
             message: error.message || "Error deleting job",
         });
+    }
+});
+
+exports.downloadJobFolderHandler = onRequest({cors: true}, async (req, res) => {
+    if (req.method !== "GET") {
+        res.status(405).send("Method Not Allowed");
+        return;
+    }
+
+    try {
+        const { jobFolder } = req.query;
+        if (!jobFolder) {
+            res.status(400).json({
+                success: false,
+                message: "jobFolder parameter is required",
+            });
+            return;
+        }
+
+        const bucket = getBucket();
+        const resultPrefix = `${RESULTS_PREFIX}${jobFolder}/`;
+
+        const [resultFiles] = await bucket.getFiles({ prefix: resultPrefix });
+
+        if (resultFiles.length === 0) {
+            res.status(404).json({
+                success: false,
+                message: `No files found for job folder: ${jobFolder}`,
+            });
+            return;
+        }
+
+        res.setHeader("Content-Type", "application/zip");
+        res.setHeader("Content-Disposition", `attachment; filename="${jobFolder}.zip"`);
+
+        const archive = archiver("zip", {
+            zlib: { level: 9 },
+        });
+
+        archive.on("error", (err) => {
+            logger.error("Archive error", err);
+            if (!res.headersSent) {
+                res.status(500).json({
+                    success: false,
+                    message: "Error creating archive",
+                });
+            }
+        });
+
+        archive.pipe(res);
+
+        for (const file of resultFiles) {
+            const [content] = await file.download();
+            const relativePath = file.name.includes("/") 
+                ? file.name.split("/").slice(-2).join("/")
+                : file.name;
+            archive.append(content, { name: relativePath });
+        }
+
+        await archive.finalize();
+    } catch (error) {
+        logger.error("Error downloading job folder", error);
+        if (!res.headersSent) {
+            res.status(500).json({
+                success: false,
+                message: error.message || "Error downloading job folder",
+            });
+        }
     }
 });
 

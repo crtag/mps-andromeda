@@ -46,7 +46,10 @@ const API = {
     },
     FILE: IS_LOCAL
         ? `${EMULATOR_BASE}/getJobFile`
-        : 'https://getjobfile-poloq3qrtq-uc.a.run.app'
+        : 'https://getjobfile-poloq3qrtq-uc.a.run.app',
+    DOWNLOAD_FOLDER: IS_LOCAL
+        ? `${EMULATOR_BASE}/downloadJobFolder`
+        : 'https://downloadjobfolder-poloq3qrtq-uc.a.run.app'
 };
 
 console.log('API URLs configured:', API);
@@ -259,6 +262,11 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
         return `
             <div class="job-item">
                 <div class="job-filename">
+                    ${isCompleted && job.jobFolder ? `
+                        <a href="${API.DOWNLOAD_FOLDER}?jobFolder=${encodeURIComponent(job.jobFolder)}" class="btn-download-folder" title="Download folder" download="${job.jobFolder}.zip">
+                            <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTUgMTlIMTkiIHN0cm9rZT0iIzAwNjZjYyIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPHBhdGggZD0iTTUgMTlWMTciIHN0cm9rZT0iIzAwNjZjYyIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPHBhdGggZD0iTTE5IDE5VjE3IiBzdHJva2U9IiMwMDY2Y2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CjxwYXRoIGQ9Ik0xMiA4VjE2IiBzdHJva2U9IiMwMDY2Y2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CjxwYXRoIGQ9Ik05IDEzTDEyIDE2TDE1IDEzIiBzdHJva2U9IiMwMDY2Y2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPg==" alt="download">
+                        </a>
+                    ` : ''}
                     ${job.jobFolder ? job.jobFolder : ''}
                     
                     ${isCompleted && job?.normalTermination ?
@@ -304,11 +312,9 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
                     : ''
                 }
 
-                ${job.status === 'PENDING' ? `
                 <div class="job-actions">
-                    <button class="btn-delete" onclick='deleteJob(${JSON.stringify(job.jobFolder)}, ${JSON.stringify(job.filename)})'>Delete</button>
+                    ${job.status === 'PENDING' ? `<button class="btn-delete" onclick='deleteJob(${JSON.stringify(job.jobFolder)}, ${JSON.stringify(job.filename)})'>Delete</button>` : ''}
                 </div>
-                ` : ''}
 
                 <div class="job-results">
                     ${job?.totalAtomNumber ? `TOTAL ATOM NUMBER: ${job.totalAtomNumber}` : ''}

@@ -11,5 +11,6 @@ exports.uploadJobSpec = jobManagement.uploadJobSpecHandler;
 exports.previewJob = jobManagement.previewJobHandler;
 exports.confirmJob = jobManagement.confirmJobHandler;
 exports.deleteJob = jobManagement.deleteJobHandler;
+exports.downloadJobFolder = jobManagement.downloadJobFolderHandler;
 exports.postTerminationScan = jobManagement.terminationPostScanHandler;
 exports.postTerminationParse = jobManagement.terminationPostParseHandler;
