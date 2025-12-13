@@ -185,7 +185,11 @@ async function listCompletedAndRunningJobs(limit = 10) {
         
         return allJobs
             .filter(job => job !== null)
-            .sort((a, b) => new Date(b.completionTime || 0) - new Date(a.completionTime || 0))
+            .sort((a, b) => {
+                const timeA = a.completionTime || a.submitTime || 0;
+                const timeB = b.completionTime || b.submitTime || 0;
+                return new Date(timeB) - new Date(timeA);
+            })
             .slice(0, limit);
     } catch (error) {
         logger.error("Error listing completed/running jobs", error);

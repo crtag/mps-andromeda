@@ -93,82 +93,46 @@ function shouldViewFile(filename) {
     return VIEW_FILE_EXTENSIONS.includes(extension);
 }
 
+function createFileLink(filePath, text, fileType, view) {
+    const url = getFileUrl(filePath, fileType, view);
+    return {
+        url,
+        text,
+        download: view ? null : text
+    };
+}
+
 function getDownloadLinks(job, isComplete) {
     const baseFilename = job.filename.replace('.in', '');
     const type = isComplete ? 'result' : 'spec';
-    
-    const oldStuff = !job.jobFolder;
+    const isLegacy = !job.jobFolder;
     const inputLinks = [];
     const outputLinks = [];
 
-    if (oldStuff) {
-        // Always show .in file link for legacy jobs (first row)
-        const inFilename = baseFilename + '.in';
-        const viewIn = shouldViewFile(inFilename);
-        inputLinks.push({
-            url: getFileUrl(inFilename, 'result', viewIn),
-            text: inFilename,
-            download: viewIn ? null : inFilename
-        });
-        
+    if (isLegacy) {
         if (isComplete) {
-            const outFilename = baseFilename + '.out';
-            const viewOut = shouldViewFile(outFilename);
-            outputLinks.push({
-                url: getFileUrl(outFilename, type, viewOut),
-                text: 'Output',
-                download: viewOut ? null : outFilename
-            });
-            if (job?.jobSpec && job?.jobSpec.toUpperCase().includes('EXPORT=MOLDEN')) {
-                const moldenFilename = baseFilename + '.molden';
-                const viewMolden = shouldViewFile(moldenFilename);
-                outputLinks.push({
-                    url: getFileUrl(moldenFilename, type, viewMolden),
-                    text: 'Molden',
-                    download: viewMolden ? null : moldenFilename
-                });
+            outputLinks.push(createFileLink(baseFilename + '.out', 'Output', type, shouldViewFile(baseFilename + '.out')));
+            
+            if (job?.jobSpec?.toUpperCase().includes('EXPORT=MOLDEN')) {
+                outputLinks.push(createFileLink(baseFilename + '.molden', 'Molden', type, shouldViewFile(baseFilename + '.molden')));
             }
             if (job?.optimizedGeometrySaved === 'true') {
-                const xyzFilename = baseFilename + '.xyz';
-                const viewXyz = shouldViewFile(xyzFilename);
-                outputLinks.push({
-                    url: getFileUrl(xyzFilename, type, viewXyz),
-                    text: 'Optimized XYZ',
-                    download: viewXyz ? null : xyzFilename
-                });
+                outputLinks.push(createFileLink(baseFilename + '.xyz', 'Optimized XYZ', type, shouldViewFile(baseFilename + '.xyz')));
             }
         } else if (job.status === 'RUNNING') {
-            const outFilename = baseFilename + '.out';
-            const viewOut = shouldViewFile(outFilename);
-            outputLinks.push({
-                url: getFileUrl(outFilename, 'result', viewOut),
-                text: 'Pending Output',
-                download: viewOut ? null : outFilename
-            });
+            outputLinks.push(createFileLink(baseFilename + '.out', 'Pending Output', 'result', shouldViewFile(baseFilename + '.out')));
         }
     } else {
-        if (job.inputFiles && Array.isArray(job.inputFiles)) {
+        if (job.inputFiles?.length) {
             job.inputFiles.forEach(filename => {
-                const filePath = job.jobFolder ? `${job.jobFolder}/${filename}` : filename;
-                const fileType = isComplete ? 'result' : 'spec';
-                const view = shouldViewFile(filename);
-                inputLinks.push({
-                    url: getFileUrl(filePath, fileType, view),
-                    text: filename,
-                    download: view ? null : filename
-                });
+                const filePath = `${job.jobFolder}/${filename}`;
+                inputLinks.push(createFileLink(filePath, filename, type, shouldViewFile(filename)));
             });
         }
-        if (job.outputFiles && Array.isArray(job.outputFiles)) {
+        if (job.outputFiles?.length) {
             job.outputFiles.forEach(filename => {
-                const filePath = job.jobFolder ? `${job.jobFolder}/${filename}` : filename;
-                const fileType = 'result';
-                const view = shouldViewFile(filename);
-                outputLinks.push({
-                    url: getFileUrl(filePath, fileType, view),
-                    text: filename,
-                    download: view ? null : filename
-                });
+                const filePath = `${job.jobFolder}/${filename}`;
+                outputLinks.push(createFileLink(filePath, filename, 'result', shouldViewFile(filename)));
             });
         }
     }
@@ -246,6 +210,11 @@ async function cancelJob(jobFolder, filename) {
 window.deleteJob = deleteJob;
 window.cancelJob = cancelJob;
 
+function renderLink(link) {
+    const downloadAttr = link.download ? `download="${link.download}"` : '';
+    return `<a href="${link.url}" ${downloadAttr} target="_blank">${link.text}</a>`;
+}
+
 function updateJobsList(sectionId, jobs, isCompleted = false) {
     const section = document.getElementById(sectionId);
     const list = section.querySelector('.jobs-list');
@@ -257,22 +226,15 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
 
     list.innerHTML = jobs.map(job => {
         const { inputLinks, outputLinks } = getDownloadLinks(job, isCompleted);
+        const isLegacy = !job.jobFolder;
         
-        // For legacy jobs, extract .in file link to show before "successful run"
-        const legacyJobInLink = !job.jobFolder && isCompleted && inputLinks.length > 0 
-            ? inputLinks[0] 
+        const inFilename = isLegacy ? job.filename + '.in' : null;
+        const legacyInLink = isLegacy && isCompleted && inFilename 
+            ? createFileLink(inFilename, inFilename, 'result', shouldViewFile(inFilename))
             : null;
         
-        const inputLinksHtml = inputLinks.map(link => 
-            link.download 
-                ? `<a href="${link.url}" download="${link.download}" target="_blank">${link.text}</a>`
-                : `<a href="${link.url}" target="_blank">${link.text}</a>`
-        ).join('');
-        const outputLinksHtml = outputLinks.map(link => 
-            link.download 
-                ? `<a href="${link.url}" download="${link.download}" target="_blank">${link.text}</a>`
-                : `<a href="${link.url}" target="_blank">${link.text}</a>`
-        ).join('');
+        const inputLinksHtml = inputLinks.map(renderLink).join('');
+        const outputLinksHtml = outputLinks.map(renderLink).join('');
 
         return `
             <div class="job-item">
@@ -282,9 +244,7 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
                             <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTUgMTlIMTkiIHN0cm9rZT0iIzAwNjZjYyIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPHBhdGggZD0iTTUgMTlWMTciIHN0cm9rZT0iIzAwNjZjYyIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPHBhdGggZD0iTTE5IDE5VjE3IiBzdHJva2U9IiMwMDY2Y2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CjxwYXRoIGQ9Ik0xMiA4VjE2IiBzdHJva2U9IiMwMDY2Y2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CjxwYXRoIGQ9Ik05IDEzTDEyIDE2TDE1IDEzIiBzdHJva2U9IiMwMDY2Y2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPg==" alt="download">
                         </a>
                     ` : ''}
-                    ${legacyJobInLink ? `
-                        <a href="${legacyJobInLink.url}" ${legacyJobInLink.download ? `download="${legacyJobInLink.download}"` : ''} target="_blank">${legacyJobInLink.text}</a>
-                    ` : (job.jobFolder ? job.jobFolder : '')}
+                    ${legacyInLink ? renderLink(legacyInLink) : (job.jobFolder || '')}
                     
                     ${isCompleted && job?.normalTermination ?
                         job.normalTermination === 'true' ?  
