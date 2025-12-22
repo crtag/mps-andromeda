@@ -45,30 +45,51 @@ async function handleJobCompletionPySCF(jobFilePath, status) {
     const [jobFiles] = await getBucket().getFiles({ prefix: jobFolderPath });
     const jobFile = jobFiles.find(f => f.name === jobFilePath);
     const jsonFile = jobFiles.find(f => f.name.endsWith('.json'));
-    
-    try {
-        const metadata = {
-            normalTermination: (status === "ENDED"),
-        };
 
+    const metadata = {
+        normalTermination: (status === "ENDED"),
+        completionTime: new Date().toISOString(),
+    };
+
+    try {
         if (!jsonFile) {
             logger.warn(`handleJobCompletionPySCF: No JSON file found for ${status.toLowerCase()} job ${jobFolderPath}`);
-            metadata.lastOutputLine = "Server Error. No result file found.";
-            
-        } else {
-            logger.info(`handleJobCompletionPySCF: Extracting metadata from JSON file for ${jobFolderPath}`);
-            
-            const [content] = await jsonFile.download();
-            const jsonContent = content.toString("utf8");
-            const parsedData = JSON.parse(jsonContent);
-            //ADD MORE METADATA HERE ERROR AND NORMAL
-
-            metadata.lastOutputLine = parsedData.error || null;
+            metadata.error = "Server Error: No result file found.";
+            metadata.status = "FAILED";
+            metadata.normalTermination = false;
+            await updateFileMeta(jobFile, metadata);
+            return;
         }
+        logger.info(`handleJobCompletionPySCF: Extracting metadata from JSON file for ${jobFolderPath}`);
+        
+        const [content] = await jsonFile.download();
+        const jsonContent = content.toString("utf8");
+        const parsedData = JSON.parse(jsonContent);
+
+        if (parsedData.error) {
+            if (typeof parsedData.error === 'string') {
+                metadata.error = parsedData.error;
+            } else {
+                const errorType = parsedData.error.type || 'Error';
+                const errorMessage = parsedData.error.message || JSON.stringify(parsedData.error);
+                metadata.error = `${errorType}: ${errorMessage}`;
+            }
+            metadata.status = "FAILED";
+            metadata.normalTermination = false;
+        } 
         await updateFileMeta(jobFile, metadata);
 
     } catch (error) {
         logger.error(`Failed to extract metadata from JSON for ${jobFolderPath}`, error);
+        if (jobFile) {
+            const errorMetadata = {
+                status: "FAILED",
+                normalTermination: false,
+                completionTime: new Date().toISOString(),
+                error: "Error:Failed to extract metadata from JSON",
+            };
+            await updateFileMeta(jobFile, errorMetadata);
+        }
     }
 }
 

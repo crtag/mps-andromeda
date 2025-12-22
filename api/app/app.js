@@ -248,11 +248,13 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
                     
                     ${isCompleted && job?.normalTermination ?
                         job.normalTermination === 'true' ?  
-                            `<span class="normal-termination true">&#10004; successful run</span>` :
-                            `<span class="normal-termination false">&#9888; aborted run</span>` : ''
+                            `<span class="normal-termination true">&#10004; SUCCESSFUL RUN</span>` :
+                            `<span class="normal-termination false">&#9888; ERROR RUN</span>` : ''
                     }
 
-                    ${isCompleted && job?.normalTermination && job.normalTermination === 'false' ?
+                    ${job?.error ? `<div class="error-termination-reason">${job.error}</div>` : ''}
+
+                    ${isCompleted && job?.normalTermination && job.normalTermination !== 'true' && !job?.error ?
                         job?.lastOutputLine?.includes("Error Termination.") ?
                             `<div class="error-termination-reason">${job.lastOutputLine}</div>` :
                             `<div class="error-termination-reason">Unknown Termination Reason.</div>` : ''
