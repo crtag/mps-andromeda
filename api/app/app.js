@@ -304,7 +304,7 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
                     ${job?.totalTime ? `<br>TOTAL TIME: ${job.totalTime}` : ''}
                 </div>
 
-                ${outputLinksHtml ? `<div class="job-files">${outputLinksHtml}</div>` : ''}
+                ${outputLinksHtml ? `<div class="job-output-files">${outputLinksHtml}</div>` : ''}
 
 
             </div>

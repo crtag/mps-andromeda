@@ -76,7 +76,14 @@ async function handleJobCompletionPySCF(jobFilePath, status) {
             }
             metadata.status = "FAILED";
             metadata.normalTermination = false;
-        } 
+        } else {
+            if (parsedData.computation_time !== undefined) {
+                metadata.totalTime = parsedData.computation_time;
+            }
+            if (parsedData.energy !== undefined) {
+                metadata.minimizedEnergy = parsedData.energy;
+            }
+        }
         await updateFileMeta(jobFile, metadata);
 
     } catch (error) {
