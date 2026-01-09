@@ -324,7 +324,7 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
             worker: worker, // Worker type extracted from config
             tags: tags, // Tags extracted from config
             jobSpec: jobSpec, // Job specifications (SPEC for QUICK, FUNCTIONAL BASIS TASK for PySCF)
-            atomCount: atomCount,
+            totalAtomNumber: atomCount,
             description: req.body.description || "",
             jobFolder: jobFolderName, // Store folder name in metadata
             inputFiles: JSON.stringify(inputFiles), // List of all uploaded files
