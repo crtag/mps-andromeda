@@ -12,13 +12,17 @@ async function getNextJobToRun(workerType) {
     const pendingJobs = await listPendingAndDraftJobs();
     if (pendingJobs.length === 0) return null;
 
-    // Filter by worker type and PENDING status
-    const job = pendingJobs.find((job) => 
-        job.status === "PENDING" && 
-        job.worker && 
-        job.worker.toLowerCase() === workerType.toLowerCase()
-    );
-    if (!job) return null;
+    // Filter by worker type and PENDING status, then sort by submitTime (oldest first) for FIFO
+    const eligibleJobs = pendingJobs
+        .filter((job) => 
+            job.status === "PENDING" && 
+            job.worker && 
+            job.worker.toLowerCase() === workerType.toLowerCase()
+        )
+        .sort((a, b) => new Date(a.submitTime) - new Date(b.submitTime));
+    
+    if (eligibleJobs.length === 0) return null;
+    const job = eligibleJobs[0];
 
     try {
         // Update job status to RUNNING
