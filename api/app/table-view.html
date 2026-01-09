@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Table View - QUICK Job Manager</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            min-width: 100%;
+            overflow-x: auto;
+        }
+        main {
+            width: 100% !important;
+            max-width: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        #table-container {
+            margin: 0;
+            padding: 20px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        #job-table {
+            width: 100%;
+        }
+        .tabulator {
+            width: 100% !important;
+        }
+        .tabulator-tableHolder {
+            overflow-x: auto !important;
+        }
+        .table-controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .table-controls button {
+            padding: 8px 16px;
+            background: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .table-controls button:hover {
+            background: #0052a3;
+        }
+        .table-controls input {
+            padding: 6px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            width: 80px;
+        }
+        .table-controls label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+        }
+        .column-toggle {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            margin-top: 10px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 4px;
+            overflow-x: hidden;
+        }
+        .column-toggle > div {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        .column-toggle > div:hover {
+            background: #e0e0e0;
+        }
+        .column-toggle input[type="checkbox"] {
+            cursor: pointer;
+        }
+        .column-toggle select,
+        .column-toggle input[type="text"],
+        .column-toggle input[type="number"] {
+            font-size: 12px;
+        }
+        .filter-indicator {
+            margin-left: 5px;
+            font-size: 12px;
+            color: #0066cc;
+            font-weight: bold;
+        }
+        #loading-message {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        #error-message {
+            text-align: center;
+            padding: 40px;
+            color: #cc0000;
+            background: #ffe6e6;
+            border-radius: 4px;
+            margin: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="auth-container" style="display: none;">
+        <div id="auth-card">
+            <h1>QUICK Job Manager</h1>
+            <p>Please sign in to view job data.</p>
+        </div>
+    </div>
+
+    <main style="display: none;">
+        <div id="loading-message">Loading job data...</div>
+        <div id="error-message" style="display: none;"></div>
+
+        <div id="table-container" style="display: none;">
+            <div class="table-controls">
+                <button id="export-csv-btn" type="button">Export to CSV</button>
+                <button id="toggle-columns-btn" type="button">Toggle and Filter</button>
+                <div id="active-filters-controls" style="display: none; align-items: center; gap: 10px; padding: 4px 12px; background: #e6f2ff; border-radius: 4px; font-size: 12px; color: #0066cc;">
+                    <span id="active-filters-text"></span>
+                    <button id="clear-filters-btn" type="button" style="padding: 4px 12px; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Clear All Filters</button>
+                </div>
+                <label>
+                    Row Limit:
+                    <input type="number" id="row-limit-input" value="75" min="1" max="1000">
+                </label>
+                <button id="refresh-btn" type="button">Reload Data</button>
+            </div>
+            <div id="column-toggle-panel" class="column-toggle" style="display: none;"></div>
+            <div id="table-loading-message" style="display: none; text-align: center; padding: 20px; color: #666;">
+                Reloading data...
+            </div>
+            <div id="job-table"></div>
+        </div>
+    </main>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+    <script src="table-view.js"></script>
+</body>
+</html>
+
