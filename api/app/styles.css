@@ -328,6 +328,22 @@ section {
     padding-bottom: 10px;
 }
 
+.job-output-files {
+    padding-bottom: 10px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.job-output-files a {
+    color: #0066cc;
+    text-decoration: none;
+}
+
+.job-output-files a:hover {
+    text-decoration: underline;
+}
+
 h2 > div {
     display: inline;
     font-size: small;
