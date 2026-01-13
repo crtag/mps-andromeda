@@ -541,5 +541,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Set up table view button handler
+    const tableViewBtn = document.getElementById('table-view-btn');
+    if (tableViewBtn) {
+        tableViewBtn.addEventListener('click', () => {
+            window.open('table-view.html', '_blank');
+        });
+    }
+
     // Auth state will be handled by onAuthStateChanged
 });

@@ -506,3 +506,11 @@ textarea {
 .file-scratch {
     text-decoration: line-through;
 }
+
+.file-clickable {
+    transition: opacity 0.2s;
+}
+
+.file-clickable:hover {
+    opacity: 0.7;
+}

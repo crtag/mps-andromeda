@@ -197,6 +197,64 @@ async function listCompletedAndRunningJobs(limit = 10) {
     }
 }
 
+async function getAllJobJsonData(limit = 75) {
+    try {
+        const allFiles = await listFilesWithQuery(RESULTS_PREFIX);
+        const jsonFiles = allFiles.filter(file => {
+            const pathParts = file.name.replace(RESULTS_PREFIX, "").split("/");
+            return pathParts.length === 2 && file.name.endsWith('.json');
+        });
+
+        // Sort by filename (job folder name contains timestamp) - newest first
+        jsonFiles.sort((a, b) => b.name.localeCompare(a.name));
+        
+        // Take only the top N files
+        const topFiles = jsonFiles.slice(0, limit);
+
+        // Load JSON files and extract job folder from path
+        const jsonDataArray = await Promise.all(topFiles.map(async (file) => {
+            const pathParts = file.name.replace(RESULTS_PREFIX, "").split("/");
+            const jobFolder = pathParts[0];
+            
+            // Get file creation time
+            const [fileMetadata] = await file.getMetadata();
+            const fileTime = fileMetadata.timeCreated;
+            
+            // Convert to ISO string
+            const completedTime = fileTime instanceof Date 
+                ? fileTime.toISOString() 
+                : (fileTime || new Date().toISOString());
+            
+            try {
+                const [content] = await file.download();
+                const jsonContent = content.toString("utf8");
+                const parsedData = JSON.parse(jsonContent);
+                
+                // Filter out running jobs if status is in JSON
+                if (parsedData.status === 'RUNNING') {
+                    return null;
+                }
+                
+                // Return JSON data with job identifier and completed timestamp
+                return {
+                    job: jobFolder,
+                    completed: completedTime,
+                    ...parsedData,
+                };
+            } catch (error) {
+                logger.warn(`Failed to parse JSON file for job ${jobFolder}`, error);
+                return null;
+            }
+        }));
+
+        // Filter out nulls (failed parses or running jobs)
+        return jsonDataArray.filter(data => data !== null);
+    } catch (error) {
+        logger.error("Error getting all job JSON data", error);
+        throw error;
+    }
+}
+
 
 async function getJobFile(filename, type) {
     try {
@@ -510,6 +568,7 @@ async function deleteJob(jobFolder) {
 module.exports = {
     listPendingAndDraftJobs,
     listCompletedAndRunningJobs,
+    getAllJobJsonData,
     getJobFile,
     saveJobFile,
     saveJobFileInFolder,

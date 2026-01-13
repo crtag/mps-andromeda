@@ -6,6 +6,7 @@ const archiver = require("archiver");
 const {
     listPendingAndDraftJobs,
     listCompletedAndRunningJobs,
+    getAllJobJsonData,
     getJobFile,
     deleteJob,
     jobFolderExists,
@@ -47,6 +48,22 @@ exports.listCompletedAndRunningJobsHandler = onRequest({cors: true}, async (req,
         res.status(200).json(jobs);
     } catch (error) {
         logger.error("Error listing completed jobs", error);
+        res.status(500).send("Internal Server Error");
+    }
+});
+
+exports.getAllJobJsonDataHandler = onRequest({cors: true}, async (req, res) => {
+    if (req.method !== "GET") {
+        res.status(405).send("Method Not Allowed");
+        return;
+    }
+
+    try {
+        const limit = parseInt(req.query.limit) || 75;
+        const jsonData = await getAllJobJsonData(limit);
+        res.status(200).json(jsonData);
+    } catch (error) {
+        logger.error("Error getting all job JSON data", error);
         res.status(500).send("Internal Server Error");
     }
 });

@@ -16,6 +16,13 @@ const UploadModule = (function() {
     let elements = null;
     let fetchJobs = null;
     let externalStatusCallback = null;
+    
+    // Track order counters per file type for default ordering
+    const orderCounters = {};
+    
+    // Pin icon SVGs (base64 encoded)
+    const PIN_ICON_UNPINNED = 'PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3QgeD0iNSIgeT0iMiIgd2lkdGg9IjYiIGhlaWdodD0iMiIgcng9IjAuNSIgZmlsbD0iIzAwNjZjYyIgc3Ryb2tlPSIjMDA2NmNjIiBzdHJva2Utd2lkdGg9IjAuNSIvPgo8cmVjdCB4PSI2LjUiIHk9IjQiIHdpZHRoPSIzIiBoZWlnaHQ9IjUiIGZpbGw9IiMwMDY2Y2MiIHN0cm9rZT0iIzAwNjZjYyIgc3Ryb2tlLXdpZHRoPSIwLjUiLz4KPHJlY3QgeD0iNCIgeT0iOSIgd2lkdGg9IjgiIGhlaWdodD0iMiIgZmlsbD0iIzAwNjZjYyIgc3Ryb2tlPSIjMDA2NmNjIiBzdHJva2Utd2lkdGg9IjAuNSIvPgo8cGF0aCBkPSJNNyAxMy41IEw5IDEzLjUgTDggMTYgWiIgZmlsbD0iIzAwNjZjYyIgc3Ryb2tlPSIjMDA2NmNjIiBzdHJva2Utd2lkdGg9IjAuNSIvPgo8cGF0aCBkPSJNNCA5IEw4IDYgTDEyIDkgWiIgZmlsbD0iIzAwNjZjYyIgc3Ryb2tlPSIjMDA2NmNjIiBzdHJva2Utd2lkdGg9IjAuNSIvPgo8cmVjdCB4PSI3IiB5PSIxMi41IiB3aWR0aD0iMiIgaGVpZ2h0PSIxLjUiIGZpbGw9IiMwMDY2Y2MiIHN0cm9rZT0iIzAwNjZjYyIgc3Ryb2tlLXdpZHRoPSIwLjUiLz4KPC9zdmc+';
+    const PIN_ICON_PINNED = 'PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3QgeD0iNSIgeT0iNCIgd2lkdGg9IjYiIGhlaWdodD0iMiIgcng9IjAuNSIgZmlsbD0iIzAwNjZjYyIgc3Ryb2tlPSIjMDA2NmNjIiBzdHJva2Utd2lkdGg9IjAuNSIvPgo8cmVjdCB4PSI2LjUiIHk9IjYiIHdpZHRoPSIzIiBoZWlnaHQ9IjUiIGZpbGw9IiMwMDY2Y2MiIHN0cm9rZT0iIzAwNjZjYyIgc3Ryb2tlLXdpZHRoPSIwLjUiLz4KPHJlY3QgeD0iNCIgeT0iMTEiIHdpZHRoPSI4IiBoZWlnaHQ9IjIiIGZpbGw9IiMwMDY2Y2MiIHN0cm9rZT0iIzAwNjZjYyIgc3Ryb2tlLXdpZHRoPSIwLjUiLz4KPHBhdGggZD0iTTQgMTEgTDggOCBMMTIgMTEgWiIgZmlsbD0iIzAwNjZjYyIgc3Ryb2tlPSIjMDA2NmNjIiBzdHJva2Utd2lkdGg9IjAuNSIvPgo8cmVjdCB4PSI3IiB5PSIxMiIgd2lkdGg9IjIiIGhlaWdodD0iMS41IiBmaWxsPSIjMDA2NmNjIiBzdHJva2U9IiMwMDY2Y2MiIHN0cm9rZS13aWR0aD0iMC41Ii8+Cjwvc3ZnPg==';
 
     // ===================================================================
     // FILE HANDLING
@@ -28,15 +35,44 @@ const UploadModule = (function() {
         const fileType = filename.endsWith('.cfg') ? 'config' : 
                         filename.endsWith('.xyz') ? 'xyz' : 'other';
         
+        // Remove previous version if file with same name exists
+        const existingIndex = fileState.uploadedFiles.findIndex(f => f.filename === file.name);
+        if (existingIndex > -1) {
+            const existingFile = fileState.uploadedFiles[existingIndex];
+            // If it was a config file, clear the config state
+            if (existingFile.type === 'config') {
+                fileState.config = null;
+            }
+            fileState.uploadedFiles.splice(existingIndex, 1);
+        }
+        
+        // Initialize order counter for this file type if needed
+        if (!(fileType in orderCounters)) {
+            orderCounters[fileType] = 0;
+        }
+        
         const fileObj = {
             filename: file.name,
             content: null,
             type: fileType,
-            isExpected: false
+            isExpected: false,
+            pinned: false,
+            autoPinned: false,
+            order: orderCounters[fileType]++
         };
         
         fileState.uploadedFiles.push(fileObj);
         updateFileList();
+        
+        // After adding file, if config exists and there are other files of same type,
+        // give new file lowest order to make it active
+        const filesOfType = getMatchingFilesForFile(fileObj);
+        if (filesOfType && filesOfType.length > 1) {
+            const minOrder = Math.min(...filesOfType.map(f => f.order));
+            if (fileObj.order > minOrder) {
+                fileObj.order = minOrder - 1;
+            }
+        }
         
         // Check file size for large files (warn if > 50MB)
         const fileSizeMB = file.size / (1024 * 1024);
@@ -103,11 +139,17 @@ const UploadModule = (function() {
         
         // If config file not found in list, create it (shouldn't happen, but handle race condition)
         if (!configFileObj) {
+            if (!('config' in orderCounters)) {
+                orderCounters['config'] = 0;
+            }
             configFileObj = {
                 filename: filename,
                 content: btoa(content),
                 type: 'config',
-                isExpected: false
+                isExpected: false,
+                pinned: false,
+                autoPinned: false,
+                order: orderCounters['config']++
             };
         } else {
             configFileObj.content = btoa(content);
@@ -187,26 +229,34 @@ const UploadModule = (function() {
         const expectedFiles = fileState.config.expectedFiles || [];
         const uploadedByType = getFilesByExpectedType(expectedFiles);
         
-        // Mark files as expected
+        // Mark files as expected based on order (lowest order = active)
         expectedFiles.forEach(expectedType => {
             const files = uploadedByType[expectedType] || [];
-            if (expectedType === 'XYZ' && files.length > 1) {
-                // For XYZ files, only mark the last one as expected
-                files.forEach((file, index) => {
-                    file.isExpected = (index === files.length - 1);
-                });
-            } else {
-                // For other file types, mark all matching files as expected
-                files.forEach(file => {
-                    file.isExpected = true;
-                });
+            if (files.length === 0) {
+                return;
             }
+            
+            // Sort by order (lower order = higher priority)
+            const sorted = [...files].sort((a, b) => a.order - b.order);
+            
+            // Mark the file with lowest order as expected (active)
+            sorted.forEach((file, index) => {
+                file.isExpected = (index === 0);
+                // Reset autoPinned when file becomes active
+                if (index === 0 && file.autoPinned) {
+                    file.autoPinned = false;
+                }
+            });
         });
         
         // Config files are always expected
         fileState.uploadedFiles.forEach(file => {
             if (file.type === 'config') {
                 file.isExpected = true;
+                // Reset autoPinned for config files too
+                if (file.autoPinned) {
+                    file.autoPinned = false;
+                }
             }
         });
         
@@ -225,6 +275,72 @@ const UploadModule = (function() {
             
             validateFiles();
         }
+    }
+
+    function togglePin(filename) {
+        const file = fileState.uploadedFiles.find(f => f.filename === filename);
+        if (file) {
+            file.pinned = !file.pinned;
+            updateFileList();
+        }
+    }
+
+    function getMatchingFilesForFile(file) {
+        if (!fileState.config || file.type === 'config') {
+            return null;
+        }
+        
+        const expectedFiles = fileState.config.expectedFiles || [];
+        const uploadedByType = getFilesByExpectedType(expectedFiles);
+        
+        // Find which expected type this file matches
+        for (const expectedType of expectedFiles) {
+            const files = uploadedByType[expectedType] || [];
+            if (files.includes(file)) {
+                return files.length > 1 ? files : null;
+            }
+        }
+        
+        return null;
+    }
+
+    function toggleFileActive(filename) {
+        const file = fileState.uploadedFiles.find(f => f.filename === filename);
+        if (!file) {
+            return;
+        }
+
+        const filesOfType = getMatchingFilesForFile(file);
+        if (!filesOfType) {
+            return;
+        }
+        
+        // Sort by order
+        const sorted = [...filesOfType].sort((a, b) => a.order - b.order);
+        
+        if (file.isExpected) {
+            // File is active - scratch it off and activate next in line
+            const currentIndex = sorted.findIndex(f => f === file);
+            if (currentIndex < sorted.length - 1) {
+                // Swap with next file in order (activates next file)
+                const nextFile = sorted[currentIndex + 1];
+                const tempOrder = file.order;
+                file.order = nextFile.order;
+                nextFile.order = tempOrder;
+            } else {
+                // Last file - increase its order to scratch it off (no replacement available)
+                const maxOrder = Math.max(...filesOfType.map(f => f.order));
+                file.order = maxOrder + 1;
+            }
+        } else {
+            // File is scratched - activate it by swapping with currently active file
+            const activeFile = sorted[0]; // First one has lowest order
+            const tempOrder = file.order;
+            file.order = activeFile.order;
+            activeFile.order = tempOrder;
+        }
+        
+        validateFiles();
     }
 
     // ===================================================================
@@ -290,8 +406,52 @@ const UploadModule = (function() {
             fileName.textContent = file.filename;
             fileName.style.flex = '1';
             fileName.style.color = textColor;
-            if (fileState.config && !file.isExpected) {
-                fileName.classList.add('file-scratch');
+            
+            // Make files clickable (except config files)
+            const filesOfType = getMatchingFilesForFile(file);
+            if (filesOfType && filesOfType.length > 1) {
+                // Multiple files of this type - make clickable
+                fileName.classList.add('file-clickable');
+                fileName.style.cursor = 'pointer';
+                if (file.isExpected) {
+                    fileName.title = 'Click to scratch off this file';
+                } else {
+                    fileName.classList.add('file-scratch');
+                    fileName.title = 'Click to activate this file';
+                }
+                fileName.onclick = (e) => {
+                    e.stopPropagation();
+                    toggleFileActive(file.filename);
+                };
+            } else {
+                // Single file, not matching expected type, no config, or config file - not clickable
+                fileName.classList.remove('file-clickable');
+                if (fileState.config && !file.isExpected) {
+                    fileName.classList.add('file-scratch');
+                } else {
+                    fileName.classList.remove('file-scratch');
+                }
+                fileName.style.cursor = 'default';
+                fileName.title = '';
+                fileName.onclick = null;
+            }
+            
+            const pinBtn = document.createElement('button');
+            pinBtn.className = 'btn-clipboard';
+            const isExcluded = fileState.config && !file.isExpected && file.type !== 'config';
+            const showAsPinned = file.pinned || file.autoPinned || isExcluded;
+            const isAutoPinned = file.autoPinned || (isExcluded && !file.pinned);
+            pinBtn.title = showAsPinned ? (isAutoPinned ? 'Auto-pinned (excluded file)' : 'Pinned file') : 'Pin file';
+            pinBtn.innerHTML = `<img src="data:image/svg+xml;base64,${showAsPinned ? PIN_ICON_PINNED : PIN_ICON_UNPINNED}" alt="${showAsPinned ? 'pinned' : 'pin'}">`;
+            if (isAutoPinned) {
+                pinBtn.disabled = true;
+                pinBtn.style.opacity = '0.5';
+                pinBtn.style.cursor = 'not-allowed';
+            } else {
+                pinBtn.disabled = false;
+                pinBtn.style.opacity = '1';
+                pinBtn.style.cursor = 'pointer';
+                pinBtn.onclick = () => togglePin(file.filename);
             }
             
             const removeBtn = document.createElement('button');
@@ -301,6 +461,7 @@ const UploadModule = (function() {
             removeBtn.onclick = () => removeFile(file.filename);
             
             fileItem.appendChild(fileName);
+            fileItem.appendChild(pinBtn);
             fileItem.appendChild(removeBtn);
             elements.fileList.appendChild(fileItem);
         });
@@ -448,9 +609,46 @@ const UploadModule = (function() {
     }
 
     function resetFiles() {
+        // Check for pinned config file BEFORE filtering
+        const keptConfigFile = fileState.uploadedFiles.find(file => file.type === 'config' && file.pinned);
+        
+        const filesToKeep = fileState.uploadedFiles.filter(file => {
+            if (file.pinned) {
+                return true;
+            }
+            if (file.type === 'config') {
+                return false;
+            }
+            const isExcluded = fileState.config && !file.isExpected;
+            return isExcluded;
+        });
+        
+        // Mark excluded files as auto-pinned before clearing config
+        filesToKeep.forEach(file => {
+            if (fileState.config && !file.isExpected && file.type !== 'config' && !file.pinned) {
+                file.autoPinned = true;
+            }
+        });
+        
+        // Update file list first
+        fileState.uploadedFiles = filesToKeep;
+        
+        // Clear config state
         fileState.config = null;
-        fileState.uploadedFiles = [];
-        updateFileList();
+        
+        // Re-process config if one was kept (this will call validateFiles and updateFileList)
+        if (keptConfigFile && keptConfigFile.content) {
+            try {
+                const configContent = atob(keptConfigFile.content);
+                handleConfigContent(keptConfigFile.filename, configContent);
+            } catch (e) {
+                console.error('Error re-processing config:', e);
+                updateFileList();
+            }
+        } else {
+            // No config - update list to show grey state
+            updateFileList();
+        }
     }
 
     // ===================================================================
