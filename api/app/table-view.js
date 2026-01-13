@@ -138,6 +138,36 @@ function applyFilters() {
             
             // Use built-in Tabulator filter types for numbers
             table.addFilter(field, operator, filterNum);
+        } else if (colType === 'date') {
+            // For dates, use custom filter function
+            const dateFilterFunc = function(data, filterParams) {
+                const rowValue = data[field];
+                if (!rowValue) return false;
+                const date = new Date(rowValue);
+                if (isNaN(date.getTime())) {
+                    return String(rowValue).toLowerCase().includes(filterValue.toLowerCase());
+                }
+                
+                // Check against formatted date that user sees in the table
+                const searchValue = filterValue.toLowerCase();
+                const formattedDate = date.toLocaleString().toLowerCase();
+                const isoDate = date.toISOString().toLowerCase();
+                const yearMonthDay = date.toLocaleDateString().toLowerCase();
+                
+                // Also create MM/DD and M/D patterns for flexible matching
+                const month = date.getMonth() + 1;
+                const day = date.getDate();
+                const monthDay = `${month}/${day}`;
+                const monthDayPadded = `${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}`;
+                
+                return formattedDate.includes(searchValue) || 
+                       isoDate.includes(searchValue) || 
+                       yearMonthDay.includes(searchValue) ||
+                       monthDay.includes(searchValue) ||
+                       monthDayPadded.includes(searchValue);
+            };
+            
+            table.addFilter(dateFilterFunc);
         } else {
             // Use built-in "like" filter type for text (case-insensitive contains)
             table.addFilter(field, "like", filterValue);
@@ -159,6 +189,8 @@ function getColumnDefinitions(data) {
     
     const sample = data[0];
     const columns = [];
+    const knownColumns = new Map(); // Field -> column def
+    const unknownColumns = new Map(); // Field -> column def
     const processed = new Set();
     
     // Debug: log sample data to check timestamps
@@ -168,58 +200,107 @@ function getColumnDefinitions(data) {
         if (processed.has(field)) return;
         processed.add(field);
         
-        columnTypes[field] = colType;
+        // Get configuration from column config if available
+        const config = getColumnConfig(field, colType);
+        const isKnown = isKnownColumn(field);
+        
+        // Use config type if available (config overrides auto-detection)
+        const finalType = (isKnown && config.type) ? config.type : colType;
+        const finalTitle = title || config.displayName || field;
+        const finalWidth = width || config.width || null;
+        const finalVisible = columnVisibility[field] !== undefined 
+            ? columnVisibility[field] 
+            : (config.visible !== undefined ? config.visible : true);
+        
+        columnTypes[field] = finalType;
         
         const def = {
-            title: title || field,
+            title: finalTitle,
             field: field,
-            visible: columnVisibility[field] !== undefined ? columnVisibility[field] : true,
+            visible: finalVisible,
             headerSort: true,
-            sorter: colType === 'number' ? 'number' : colType === 'date' ? 'date' : 'alphanum'
+            sorter: finalType === 'number' ? 'number' : finalType === 'date' ? 'datetime' : 'alphanum'
         };
+        
+        // For date columns, add a custom sorter that properly handles date strings
+        if (finalType === 'date') {
+            def.sorter = function(a, b, aRow, bRow, column, dir, sorterParams) {
+                const dateA = new Date(a);
+                const dateB = new Date(b);
+                
+                // Handle invalid dates
+                if (isNaN(dateA.getTime()) && isNaN(dateB.getTime())) return 0;
+                if (isNaN(dateA.getTime())) return -1;
+                if (isNaN(dateB.getTime())) return 1;
+                
+                return dateA.getTime() - dateB.getTime();
+            };
+        }
         
         if (formatter) {
             def.formatter = formatter;
         }
         
-        if (width) {
-            def.width = width;
+        if (finalWidth) {
+            def.width = finalWidth;
         }
         
-        columns.push(def);
+        // Add to appropriate map
+        if (isKnown) {
+            knownColumns.set(field, def);
+        } else {
+            unknownColumns.set(field, def);
+        }
     }
     
     function traverse(obj, prefix = '') {
         for (const [key, value] of Object.entries(obj)) {
             const field = prefix ? `${prefix}.${key}` : key;
             
+            // Get config to determine proper display name
+            const config = getColumnConfig(field, 'string');
+            const displayName = config.displayName;
+            
             if (value === null || value === undefined) {
-                addColumn(field, key, null, null, 'string');
+                addColumn(field, displayName, null, null, 'string');
             } else if (Array.isArray(value)) {
-                addColumn(field, key, (cell) => {
+                addColumn(field, displayName, (cell) => {
                     return Array.isArray(cell.getValue()) ? cell.getValue().join(', ') : cell.getValue();
-                }, null, 'array');
+                }, null, 'string');
             } else if (typeof value === 'object') {
-                traverse(value, field);
+                // Flatten objects to comma-separated string of their leaf values
+                addColumn(field, displayName, (cell) => {
+                    const val = cell.getValue();
+                    if (!val || typeof val !== 'object') return '';
+                    return Object.values(val).filter(v => v != null).join(', ');
+                }, null, 'string');
             } else {
                 if (typeof value === 'number') {
-                    addColumn(field, key, null, 120, 'number');
+                    addColumn(field, displayName, null, null, 'number');
                 } else if (typeof value === 'boolean') {
-                    addColumn(field, key, (cell) => {
+                    addColumn(field, displayName, (cell) => {
                         const val = cell.getValue();
                         return val === true ? 'true' : val === false ? 'false' : '';
-                    }, 100, 'boolean');
+                    }, null, 'boolean');
                 } else {
-                    // Check if it's a date string (ISO format)
-                    if (field === 'completed' || (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value))) {
-                        addColumn(field, key, (cell) => {
+                    // Check if config explicitly defines this as a date
+                    const config = getColumnConfig(field, 'string');
+                    
+                    // Check if it's a date string (ISO format or MM/DD/YYYY format)
+                    const isISODate = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value);
+                    const isSlashDate = /^\d{2}\/\d{2}\/\d{4},?\s+\d{2}:\d{2}:\d{2}/.test(value);
+                    const isDateByDetection = (typeof value === 'string' && (isISODate || isSlashDate));
+                    const isDateByConfig = (config.type === 'date');
+                    
+                    if (isDateByDetection || isDateByConfig) {
+                        addColumn(field, displayName, (cell) => {
                             const val = cell.getValue();
                             if (!val) return '';
                             const date = new Date(val);
                             return isNaN(date.getTime()) ? val : date.toLocaleString();
-                        }, 180, 'date');
+                        }, null, 'date');
                     } else {
-                        addColumn(field, key, null, null, 'string');
+                        addColumn(field, displayName, null, null, 'string');
                     }
                 }
             }
@@ -228,9 +309,48 @@ function getColumnDefinitions(data) {
     
     traverse(sample);
     
+    // Order columns: known columns in config order, then unknown columns
+    const defaultOrder = getDefaultColumnOrder();
+    
+    // Add any known columns from config that weren't in the sample data
+    // This ensures columns like 'error' are available even if first row doesn't have them
+    defaultOrder.forEach(field => {
+        if (!processed.has(field)) {
+            // Column is in config but not in data - add it anyway
+            const config = getColumnConfig(field, 'string');
+            const colType = config.type || 'string';
+            
+            // Add formatter to handle objects (flatten to comma-separated values)
+            const formatter = (cell) => {
+                const val = cell.getValue();
+                if (!val) return '';
+                if (typeof val === 'object') {
+                    return Object.values(val).filter(v => v != null).join(', ');
+                }
+                return val;
+            };
+            
+            addColumn(field, config.displayName, formatter, null, colType);
+        }
+    });
+    
+    // Add known columns in the order defined in COLUMN_CONFIG
+    defaultOrder.forEach(field => {
+        if (knownColumns.has(field)) {
+            columns.push(knownColumns.get(field));
+        }
+    });
+    
+    // Add unknown columns at the end (alphabetically for consistency)
+    const unknownFields = Array.from(unknownColumns.keys()).sort();
+    unknownFields.forEach(field => {
+        columns.push(unknownColumns.get(field));
+    });
+    
     allColumns = columns.map(col => col.field);
     
-    // Apply saved column order if available
+    // Apply saved column order if available (user preference overrides default)
+    // Only apply if we actually have saved preferences (not just empty array)
     if (columnOrder && columnOrder.length > 0) {
         // Reorder columns based on saved order
         const orderedColumns = [];
@@ -252,6 +372,7 @@ function getColumnDefinitions(data) {
         return orderedColumns;
     }
     
+    // Return columns in default config order (known columns first, then unknown)
     return columns;
 }
 
@@ -331,6 +452,23 @@ function updateColumnTogglePanel() {
     panel.innerHTML = '';
     filterElements = {};
     
+    // Create drop indicator line (will be positioned dynamically)
+    const dropIndicator = document.createElement('hr');
+    dropIndicator.id = 'drop-indicator';
+    dropIndicator.style.position = 'absolute';
+    dropIndicator.style.left = '30px'; // Start after drag handle and checkbox
+    dropIndicator.style.right = '10px'; // Small margin from right edge
+    dropIndicator.style.height = '0';
+    dropIndicator.style.border = 'none';
+    dropIndicator.style.borderTop = '1px solid #ccc'; // Light gray line
+    dropIndicator.style.margin = '0';
+    dropIndicator.style.padding = '0';
+    dropIndicator.style.display = 'none';
+    dropIndicator.style.pointerEvents = 'none';
+    dropIndicator.style.zIndex = '1000';
+    panel.style.position = 'relative';
+    panel.appendChild(dropIndicator);
+    
     // Get column order from table if available, otherwise use allColumns
     let tableColumns = allColumns;
     if (table) {
@@ -347,47 +485,105 @@ function updateColumnTogglePanel() {
     tableColumns.forEach(field => {
         const row = document.createElement('div');
         row.setAttribute('data-field', field);
-        row.setAttribute('draggable', 'true');
         row.style.display = 'flex';
         row.style.alignItems = 'center';
         row.style.gap = '10px';
-        row.style.marginBottom = '8px';
+        row.style.marginBottom = '4px';
         row.style.padding = '4px';
         row.style.borderRadius = '4px';
-        row.style.cursor = 'move';
         filterElements[field] = row;
         
-        // Drag and drop handlers
+        // Create drag handle
+        const dragHandle = document.createElement('div');
+        dragHandle.className = 'drag-handle';
+        dragHandle.innerHTML = '⋮⋮';
+        dragHandle.style.cursor = 'grab';
+        dragHandle.style.fontSize = '16px';
+        dragHandle.style.color = '#999';
+        dragHandle.style.userSelect = 'none';
+        dragHandle.style.padding = '0 4px';
+        dragHandle.style.lineHeight = '1';
+        dragHandle.style.letterSpacing = '-2px';
+        dragHandle.title = 'Drag to reorder';
+        
+        // Drag and drop handlers - only on drag handle
+        dragHandle.addEventListener('mousedown', () => {
+            row.setAttribute('draggable', 'true');
+        });
+        
+        dragHandle.addEventListener('mouseup', () => {
+            row.setAttribute('draggable', 'false');
+        });
+        
         row.addEventListener('dragstart', (e) => {
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/plain', field);
             row.style.opacity = '0.4';
+            dragHandle.style.cursor = 'grabbing';
         });
         
         row.addEventListener('dragend', (e) => {
             row.style.opacity = '1';
+            row.setAttribute('draggable', 'false');
+            dragHandle.style.cursor = 'grab';
+            
+            const dropIndicator = document.getElementById('drop-indicator');
+            if (dropIndicator) {
+                dropIndicator.style.display = 'none';
+            }
         });
         
         row.addEventListener('dragover', (e) => {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
-            row.style.background = '#e0e0e0';
+            
+            const dropIndicator = document.getElementById('drop-indicator');
+            if (!dropIndicator) return;
+            
+            const rect = row.getBoundingClientRect();
+            const panelRect = panel.getBoundingClientRect();
+            const rowHeight = rect.height;
+            const mouseY = e.clientY - rect.top; // Mouse position relative to row top
+            
+            // Create a deadzone in the middle 30% of the row to prevent flashing
+            const topThreshold = rowHeight * 0.35;
+            const bottomThreshold = rowHeight * 0.65;
+            
+            dropIndicator.style.display = 'block';
+            
+            if (mouseY < topThreshold) {
+                // Position at the top gap (between previous row and this row)
+                dropIndicator.style.top = (rect.top - panelRect.top - 2) + 'px';
+            } else if (mouseY > bottomThreshold) {
+                // Position at the bottom gap (between this row and next row)
+                dropIndicator.style.top = (rect.bottom - panelRect.top + 2) + 'px';
+            }
+            // else: in deadzone, keep previous position (don't update)
         });
         
         row.addEventListener('dragleave', (e) => {
-            row.style.background = '';
+            // Don't hide indicator here - let panel dragover or dragend handle it
         });
         
         row.addEventListener('drop', (e) => {
             e.preventDefault();
-            row.style.background = '';
+            
+            const dropIndicator = document.getElementById('drop-indicator');
+            if (dropIndicator) {
+                dropIndicator.style.display = 'none';
+            }
             
             const draggedField = e.dataTransfer.getData('text/plain');
             const targetField = field;
             
             if (draggedField !== targetField && table) {
+                // Determine if we should insert before or after based on drop position
+                const rect = row.getBoundingClientRect();
+                const midpoint = rect.top + rect.height / 2;
+                const insertAfter = e.clientY >= midpoint;
+                
                 // Move column in table
-                table.moveColumn(draggedField, targetField, false);
+                table.moveColumn(draggedField, targetField, insertAfter);
                 // Save and update
                 saveColumnOrder();
                 updateColumnTogglePanel();
@@ -396,7 +592,10 @@ function updateColumnTogglePanel() {
         
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
-        checkbox.checked = columnVisibility[field] !== false;
+        // Check actual column visibility from table
+        const column = table ? table.getColumn(field) : null;
+        const isVisible = column ? column.isVisible() : false;
+        checkbox.checked = isVisible;
         checkbox.addEventListener('change', (e) => {
             e.stopPropagation();
             columnVisibility[field] = e.target.checked;
@@ -410,9 +609,11 @@ function updateColumnTogglePanel() {
         });
         
         const fieldName = document.createElement('span');
-        fieldName.textContent = field;
-        fieldName.style.minWidth = '150px';
+        const config = getColumnConfig(field, columnTypes[field]);
+        fieldName.textContent = config.displayName || field;
+        fieldName.style.minWidth = '200px';
         fieldName.style.fontSize = '13px';
+        fieldName.title = field; // Show technical field name on hover
         
         const filterContainer = document.createElement('div');
         filterContainer.className = 'filter-container';
@@ -425,7 +626,54 @@ function updateColumnTogglePanel() {
         const currentFilter = getFilterValue(field);
         const currentOperator = numericFilterOperators[field] || '=';
         
-        if (colType === 'number') {
+        if (colType === 'date') {
+            // Date filter - text search on formatted date
+            const filterInput = document.createElement('input');
+            filterInput.type = 'text';
+            filterInput.style.padding = '3px';
+            filterInput.style.border = '1px solid #ccc';
+            filterInput.style.borderRadius = '3px';
+            filterInput.style.width = '120px';
+            filterInput.style.fontSize = '12px';
+            filterInput.placeholder = 'Search date...';
+            filterInput.value = currentFilter || '';
+            filterInput.title = 'Search in formatted date (e.g., "Jan", "2026", "16:58")';
+            
+            // Restore focus if this was the active field
+            if (activeField === field && activeElementType === 'input') {
+                setTimeout(() => {
+                    filterInput.focus();
+                    filterInput.value = activeValue;
+                    if (activeSelectionStart !== null) {
+                        filterInput.setSelectionRange(activeSelectionStart, activeSelectionStart);
+                    }
+                }, 0);
+            }
+            
+            let updateTimeout = null;
+            function updateFilter() {
+                clearTimeout(updateTimeout);
+                updateTimeout = setTimeout(() => {
+                    setFilterValue(field, filterInput.value);
+                }, 300);
+            }
+            
+            function updateFilterImmediate() {
+                clearTimeout(updateTimeout);
+                setFilterValue(field, filterInput.value);
+            }
+            
+            filterInput.addEventListener('input', updateFilter);
+            filterInput.addEventListener('blur', updateFilterImmediate);
+            filterInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    updateFilterImmediate();
+                }
+            });
+                
+            filterContainer.appendChild(filterInput);
+        } else if (colType === 'number') {
             const operatorSelect = document.createElement('select');
             operatorSelect.style.padding = '3px';
             operatorSelect.style.border = '1px solid #ccc';
@@ -553,12 +801,149 @@ function updateColumnTogglePanel() {
             filterContainer.appendChild(filterInput);
         }
         
+        row.appendChild(dragHandle);
         row.appendChild(checkbox);
         row.appendChild(fieldName);
         row.appendChild(filterContainer);
         
         panel.appendChild(row);
     });
+    
+    // Add dragover handler to panel to catch gaps between rows
+    panel.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        
+        const dropIndicator = document.getElementById('drop-indicator');
+        if (!dropIndicator) return;
+        
+        // Find the closest row to the cursor position
+        const rows = Array.from(panel.querySelectorAll('[data-field]'));
+        let closestRow = null;
+        let closestDistance = Infinity;
+        let insertBefore = true;
+        
+        rows.forEach(row => {
+            const rect = row.getBoundingClientRect();
+            const midpoint = rect.top + rect.height / 2;
+            const distance = Math.abs(e.clientY - midpoint);
+            
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closestRow = row;
+                insertBefore = e.clientY < midpoint;
+            }
+        });
+        
+        // Position drop indicator in the gap with deadzone logic
+        if (closestRow) {
+            const rect = closestRow.getBoundingClientRect();
+            const panelRect = panel.getBoundingClientRect();
+            const rowHeight = rect.height;
+            const mouseY = e.clientY - rect.top;
+            
+            // Create a deadzone in the middle 30% of the row
+            const topThreshold = rowHeight * 0.35;
+            const bottomThreshold = rowHeight * 0.65;
+            
+            dropIndicator.style.display = 'block';
+            
+            if (mouseY < topThreshold) {
+                dropIndicator.style.top = (rect.top - panelRect.top - 2) + 'px';
+            } else if (mouseY > bottomThreshold) {
+                dropIndicator.style.top = (rect.bottom - panelRect.top + 2) + 'px';
+            }
+            // else: in deadzone, keep current position
+        }
+    });
+    
+    panel.addEventListener('dragleave', (e) => {
+        // Hide indicator when leaving the panel
+        if (e.target === panel) {
+            const dropIndicator = document.getElementById('drop-indicator');
+            if (dropIndicator) {
+                dropIndicator.style.display = 'none';
+            }
+        }
+    });
+    
+    panel.addEventListener('drop', (e) => {
+        e.preventDefault();
+        
+        const dropIndicator = document.getElementById('drop-indicator');
+        if (dropIndicator) {
+            dropIndicator.style.display = 'none';
+        }
+        
+        // Find the closest row
+        const rows = Array.from(panel.querySelectorAll('[data-field]'));
+        let closestRow = null;
+        let closestDistance = Infinity;
+        let insertAfter = false;
+        
+        rows.forEach(row => {
+            const rect = row.getBoundingClientRect();
+            const midpoint = rect.top + rect.height / 2;
+            const distance = Math.abs(e.clientY - midpoint);
+            
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closestRow = row;
+                insertAfter = e.clientY >= midpoint;
+            }
+        });
+        
+        if (closestRow) {
+            const draggedField = e.dataTransfer.getData('text/plain');
+            const targetField = closestRow.getAttribute('data-field');
+            
+            if (draggedField !== targetField && table) {
+                table.moveColumn(draggedField, targetField, insertAfter);
+                saveColumnOrder();
+                updateColumnTogglePanel();
+            }
+        }
+    });
+    
+    // Add reset button at the end
+    const resetButtonContainer = document.createElement('div');
+    resetButtonContainer.style.marginTop = '15px';
+    resetButtonContainer.style.textAlign = 'center';
+    
+    const resetButton = document.createElement('button');
+    resetButton.textContent = 'Reset to Default View';
+    resetButton.style.padding = '6px 16px';
+    resetButton.style.background = '#0066cc';
+    resetButton.style.color = 'white';
+    resetButton.style.border = 'none';
+    resetButton.style.borderRadius = '4px';
+    resetButton.style.cursor = 'pointer';
+    resetButton.style.fontSize = '14px';
+    resetButton.style.fontWeight = 'bold';
+    
+    resetButton.addEventListener('mouseenter', () => {
+        resetButton.style.background = '#0052a3';
+    });
+    resetButton.addEventListener('mouseleave', () => {
+        resetButton.style.background = '#0066cc';
+    });
+    
+    resetButton.addEventListener('click', () => {
+        // Clear all cookies
+        document.cookie = `${COLUMN_PREFERENCE_COOKIE}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+        document.cookie = `${COLUMN_SORT_COOKIE}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+        document.cookie = `${COLUMN_ORDER_COOKIE}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+        
+        // Reset in-memory state
+        columnVisibility = {};
+        columnSort = [];
+        columnOrder = [];
+        
+        // Reload the table with default settings
+        loadJobData(false);
+    });
+    
+    resetButtonContainer.appendChild(resetButton);
+    panel.appendChild(resetButtonContainer);
     
     updateFilterIndicators();
 }

@@ -51,7 +51,7 @@
     <main style="display: none;">
         <!-- Header with Sign Out -->
         <div id="app-header">
-            <h1>QUICK Job Manager</h1>
+            <h1>Job Manager</h1>
             <div id="user-info">
                 <span id="user-email"></span>
                 <button id="signout-btn">Sign Out</button>
@@ -75,8 +75,8 @@
         </section>
 
         <section id="completed-jobs" hidden>
-            <h2>Completed Jobs <div id="completed-jobs-subtitle"></div></h2>
-            <div style="margin-bottom: 10px;">
+            <div class="section-header">
+                <h2>Completed Jobs <div id="completed-jobs-subtitle"></div></h2>
                 <button id="table-view-btn" style="padding: 8px 16px; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
                     Table View
                 </button>
@@ -96,6 +96,7 @@
 
     <!-- Load modules (order matters) -->
     <script src="config-parser.js"></script>
+    <script src="file-viewer.js"></script>
     <script src="upload.js"></script>
     <script src="app.js"></script>
 </body>

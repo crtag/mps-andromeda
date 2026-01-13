@@ -344,6 +344,47 @@ section {
     text-decoration: underline;
 }
 
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 10px;
+}
+
+.section-header h2 {
+    margin: 0;
+    flex: 1;
+}
+
+.section-header button {
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.config-link {
+    font-size: 12px;
+    color: #666;
+    text-decoration: none;
+    white-space: nowrap;
+    padding: 4px 8px;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.config-link:hover {
+    color: #0066cc;
+    background: #f0f0f0;
+    text-decoration: none;
+}
+
+.config-icon {
+    display: inline-block;
+}
+
 h2 > div {
     display: inline;
     font-size: small;
