@@ -95,21 +95,26 @@
     <!-- Firebase SDK -->
     <script>
     (function() {
-        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const scripts = isLocal ? [
-            'https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js',
-            'https://www.gstatic.com/firebasejs/12.7.0/firebase-auth-compat.js',
-            'https://www.gstatic.com/firebasejs/12.7.0/firebase-functions-compat.js',
-            'firebase-local-config.js',
-            'config-parser.js',
-            'file-viewer.js',
-            'upload.js',
-            'app.js'
-        ] : [
-            '/__/firebase/12.7.0/firebase-app-compat.js',
-            '/__/firebase/12.7.0/firebase-auth-compat.js',
-            '/__/firebase/12.7.0/firebase-functions-compat.js',
-            '/__/firebase/init.js',
+        const hostname = window.location.hostname;
+        const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
+        const isFirebaseHosting = hostname.endsWith('.web.app') || hostname.endsWith('.firebaseapp.com');
+
+        // Firebase SDK sources
+        const firebaseBase = isFirebaseHosting ? '/__/firebase/12.7.0' : 'https://www.gstatic.com/firebasejs/12.7.0';
+        const firebaseScripts = [
+            `${firebaseBase}/firebase-app-compat.js`,
+            `${firebaseBase}/firebase-auth-compat.js`,
+            `${firebaseBase}/firebase-functions-compat.js`,
+        ];
+
+        // Config: Firebase auto-init vs manual config file
+        const configScript = isFirebaseHosting
+            ? '/__/firebase/init.js'
+            : (isLocal ? 'firebase-local-config.js' : 'firebase-config.js');
+
+        const scripts = [
+            ...firebaseScripts,
+            configScript,
             'config-parser.js',
             'file-viewer.js',
             'upload.js',
