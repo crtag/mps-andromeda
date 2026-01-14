@@ -8,20 +8,6 @@
         ".git",
         "firebase-debug.log",
         "firebase-debug.*.log"
-      ],
-      "predeploy": [
-        "npm --prefix \"$RESOURCE_DIR\" run lint"
-      ]
-    },
-    {
-      "source": "functions",
-      "codebase": "feat-two-files-job",
-      "prefix": "feat-two-files-job",
-      "ignore": [
-        "node_modules",
-        ".git",
-        "firebase-debug.log",
-        "firebase-debug.*.log"
       ]
     }
   ],
@@ -55,10 +41,29 @@
       {
         "source": "**",
         "destination": "/index.html"
-      },
+      }
+    ],
+    "headers": [
       {
-        "source": "*",
-        "destination": "/index.html"
+        "source": "**",
+        "headers": [
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "DENY"
+          },
+          {
+            "key": "X-XSS-Protection",
+            "value": "1; mode=block"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          }
+        ]
       }
     ]
   }

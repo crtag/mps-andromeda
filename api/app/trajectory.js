@@ -1,11 +1,14 @@
 // Constants
+const app = firebase.app();
+const projectId = app.options.projectId;
+
 const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const EMULATOR_BASE = 'http://localhost:5001/mps-andromeda/us-central1';
+const EMULATOR_BASE = `http://localhost:5001/${projectId}/us-central1`;
 
 const API = {
     UPLOAD: IS_LOCAL
         ? `${EMULATOR_BASE}/uploadJobSpec`
-        : 'https://uploadjobspec-poloq3qrtq-uc.a.run.app', // use ?dryRun=true for testing
+        : `https://us-central1-${projectId}.cloudfunctions.net/uploadJobSpec`, // use ?dryRun=true for testing
 };
 
 // DOM Elements

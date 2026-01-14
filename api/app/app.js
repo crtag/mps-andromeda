@@ -1,55 +1,45 @@
-// Firebase Configuration
-const firebaseConfig = {
-    apiKey: "AIzaSyCDqqYmJkRvm0nnDCSyw1YQGYeyj__YF68",
-    authDomain: "mps-andromeda.firebaseapp.com",
-    projectId: "mps-andromeda",
-    storageBucket: "mps-andromeda.appspot.com",
-    messagingSenderId: "691275468466",
-    appId: "1:691275468466:web:67237ada893bfa8cde83ab"
-};
+// Firebase Configuration is done via Firebase JS SDKs (from reserved Hosting URLs) - see index.html
 
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
+// Initialize Firebase SDK
 const auth = firebase.auth();
-const storage = firebase.storage();
 const functions = firebase.functions();
+
+const app = firebase.app();
+const projectId = app.options.projectId;
 
 // Constants
 const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const EMULATOR_BASE = 'http://localhost:5001/mps-andromeda/us-central1';
+const EMULATOR_BASE = `http://localhost:5001/${projectId}/us-central1`;
 
 // Connect to emulators if running locally
 if (IS_LOCAL) {
     console.log('Running locally - connecting to Firebase emulators...');
-    functions.useEmulator('localhost', 5001);
-    storage.useEmulator('localhost', 9199);
-    console.log('Connected to Functions emulator on localhost:5001');
-    console.log('Connected to Storage emulator on localhost:9199');
+    console.log('Connect to Functions emulator on localhost:5001');
 } else {
-    console.log('Running in production mode');
+    console.log('Running in Firebase Hosting mode');
 }
 
 const API = {
     UPLOAD: IS_LOCAL
         ? `${EMULATOR_BASE}/uploadJobSpec`
-        : 'https://uploadjobspec-poloq3qrtq-uc.a.run.app',
+        : `https://us-central1-${projectId}.cloudfunctions.net/uploadJobSpec`,
     DELETE: IS_LOCAL
         ? `${EMULATOR_BASE}/deleteJob`
-        : 'https://deletejob-poloq3qrtq-uc.a.run.app',
+        : `https://us-central1-${projectId}.cloudfunctions.net/deleteJob`,
     JOBS: {
         PENDING_DRAFT: IS_LOCAL
             ? `${EMULATOR_BASE}/listPendingJobs`
-            : 'https://listpendingjobs-poloq3qrtq-uc.a.run.app',
+            : `https://us-central1-${projectId}.cloudfunctions.net/listPendingJobs`,
         COMPLETED_RUNNING: IS_LOCAL
             ? `${EMULATOR_BASE}/listCompletedJobs`
-            : 'https://listcompletedjobs-poloq3qrtq-uc.a.run.app'
+            : `https://us-central1-${projectId}.cloudfunctions.net/listCompletedJobs`
     },
     FILE: IS_LOCAL
         ? `${EMULATOR_BASE}/getJobFile`
-        : 'https://getjobfile-poloq3qrtq-uc.a.run.app',
+        : `https://us-central1-${projectId}.cloudfunctions.net/getJobFile`,
     DOWNLOAD_FOLDER: IS_LOCAL
         ? `${EMULATOR_BASE}/downloadJobFolder`
-        : 'https://downloadjobfolder-poloq3qrtq-uc.a.run.app'
+        : `https://us-central1-${projectId}.cloudfunctions.net/downloadJobFolder`
 };
 
 console.log('API URLs configured:', API);
@@ -503,8 +493,8 @@ auth.onAuthStateChanged((user) => {
     }
 });
 
-// document onload event handler
-document.addEventListener('DOMContentLoaded', () => {
+// Set up event listeners - handle both cases: DOM already loaded or still loading
+function initEventListeners() {
     // Set up login form handler
     document.getElementById('login-form').addEventListener('submit', (e) => {
         e.preventDefault();
@@ -550,4 +540,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Auth state will be handled by onAuthStateChanged
-});
+}
+
+// Initialize event listeners when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initEventListeners);
+} else {
+    // DOM already loaded (script loaded dynamically after page load)
+    initEventListeners();
+}

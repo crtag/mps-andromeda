@@ -1,12 +1,8 @@
 {
   "projects": {
-    "default": "mps-andromeda"
+    "default": "simulations-26-dev",
+    "dev": "simulations-26-dev",
+    "prod": "simulations-26-prod"
   },
-  "targets": {},
-  "etags": {
-    "mps-andromeda": {
-      "extensionInstances": {}
-    }
-  },
-  "dataconnectEmulatorConfig": {}
+  "targets": {}
 }

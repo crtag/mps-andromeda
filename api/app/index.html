@@ -3,14 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QUICK Job Manager</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' http://localhost:* http://127.0.0.1:* https://www.gstatic.com https://*.cloudfunctions.net https://*.firebaseapp.com https://*.googleapis.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src 'none';">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <title>Job Manager</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <!-- Authentication Section -->
     <div id="auth-container" style="display: none;">
         <div id="auth-card">
-            <h1>QUICK Job Manager</h1>
+            <h1>Job Manager</h1>
             <form id="login-form">
                 <div class="form-group">
                     <label for="email">Email</label>
@@ -89,15 +92,42 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/luxon/3.5.0/luxon.min.js" integrity="sha512-SN7iwxiJt9nFKiLayg3NjLItXPwRfBr4SQSIugMeBFrD4lIFJe1Z/exkTZYAg3Ul-AfZEGws2PQ+xSoaWfxRQQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
     <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-functions-compat.js"></script>
+    <script>
+    (function() {
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const scripts = isLocal ? [
+            'https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js',
+            'https://www.gstatic.com/firebasejs/12.7.0/firebase-auth-compat.js',
+            'https://www.gstatic.com/firebasejs/12.7.0/firebase-functions-compat.js',
+            'firebase-local-config.js',
+            'config-parser.js',
+            'file-viewer.js',
+            'upload.js',
+            'app.js'
+        ] : [
+            '/__/firebase/12.7.0/firebase-app-compat.js',
+            '/__/firebase/12.7.0/firebase-auth-compat.js',
+            '/__/firebase/12.7.0/firebase-functions-compat.js',
+            '/__/firebase/init.js',
+            'config-parser.js',
+            'file-viewer.js',
+            'upload.js',
+            'app.js'
+        ];
 
-    <!-- Load modules (order matters) -->
-    <script src="config-parser.js"></script>
-    <script src="file-viewer.js"></script>
-    <script src="upload.js"></script>
-    <script src="app.js"></script>
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        scripts.reduce((p, src) => p.then(() => loadScript(src)), Promise.resolve())
+            .catch(err => console.error('Script loading failed:', err));
+    })();
+    </script>
 </body>
 </html>

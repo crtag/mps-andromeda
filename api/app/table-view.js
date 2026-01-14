@@ -1,26 +1,23 @@
-const firebaseConfig = {
-    apiKey: "AIzaSyCDqqYmJkRvm0nnDCSyw1YQGYeyj__YF68",
-    authDomain: "mps-andromeda.firebaseapp.com",
-    projectId: "mps-andromeda",
-    storageBucket: "mps-andromeda.appspot.com",
-    messagingSenderId: "691275468466",
-    appId: "1:691275468466:web:67237ada893bfa8cde83ab"
-};
-
-firebase.initializeApp(firebaseConfig);
+// Firebase Configuration is done via Firebase JS SDKs (from reserved Hosting URLs) - see table-view.html
 const auth = firebase.auth();
 
+const app = firebase.app();
+const projectId = app.options.projectId;
+
+// Constants
 const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const EMULATOR_BASE = 'http://localhost:5001/mps-andromeda/us-central1';
+const EMULATOR_BASE = `http://localhost:5001/${projectId}/us-central1`;
 
 if (IS_LOCAL) {
     console.log('Running locally - connecting to Firebase emulators...');
+} else {
+    console.log('Running in Firebase Hosting mode');
 }
 
 const API = {
     GET_ALL_JSON: IS_LOCAL
         ? `${EMULATOR_BASE}/getAllJobJsonData`
-        : 'https://getalljobjsondata-poloq3qrtq-uc.a.run.app'
+        : `https://us-central1-${projectId}.cloudfunctions.net/getAllJobJsonData`
 };
 
 const COLUMN_PREFERENCE_COOKIE = 'job_table_column_visibility';
