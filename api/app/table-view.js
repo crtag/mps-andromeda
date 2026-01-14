@@ -25,6 +25,7 @@ const COLUMN_SORT_COOKIE = 'job_table_column_sort';
 const COLUMN_ORDER_COOKIE = 'job_table_column_order';
 
 let table = null;
+let tableReady = false; // Guard against accessing table before tableBuilt event
 let allColumns = [];
 let columnVisibility = {};
 let columnSort = []; // Store column sort preferences: [{field: 'fieldName', dir: 'asc'|'desc'}, ...]
@@ -86,7 +87,7 @@ function saveColumnPreferences() {
 }
 
 function saveColumnSort() {
-    if (table) {
+    if (table && tableReady) {
         const sorters = table.getSorters();
         // Extract only field and dir from sorter objects
         columnSort = sorters.map(s => ({ field: s.field, dir: s.dir }));
@@ -960,8 +961,9 @@ function initializeTable(data, preserveFilters = false) {
     
     if (table) {
         table.destroy();
+        tableReady = false;
     }
-    
+
     table = new Tabulator("#job-table", {
         data: data,
         columns: columns,
@@ -991,6 +993,7 @@ function initializeTable(data, preserveFilters = false) {
     
     // Wait for table to be built before hiding columns and applying sort
     table.on("tableBuilt", () => {
+        tableReady = true;
         columns.forEach(col => {
             if (columnVisibility[col.field] === false) {
                 table.hideColumn(col.field);
