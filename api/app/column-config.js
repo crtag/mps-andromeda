@@ -9,6 +9,12 @@ const COLUMN_CONFIG = {
         visible: true,
         width: 200
     },
+    'user_email': {
+        displayName: 'User',
+        type: 'string',
+        visible: true,
+        width: 200
+    },
     'completed': {
         displayName: 'Completed',
         type: 'date',

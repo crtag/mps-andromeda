@@ -555,7 +555,8 @@ const UploadModule = (function() {
         const requestBody = {
             configFilename: fileState.config.filename,
             configContent: fileState.config.content,
-            files: []
+            files: [],
+            userEmail: firebase.auth().currentUser?.email || null
         };
         
         // Add all expected files (XYZ, CHK, etc.) - use the file marked as expected

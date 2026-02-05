@@ -66,6 +66,24 @@ async function handleJobCompletionPySCF(jobFilePath, status) {
         const jsonContent = content.toString("utf8");
         const parsedData = JSON.parse(jsonContent);
 
+        // Add user email from job metadata to result JSON
+        try {
+            const [jobFileMetadata] = await jobFile.getMetadata();
+            if (jobFileMetadata.metadata.userEmail && !parsedData.user_email) {
+                parsedData.user_email = jobFileMetadata.metadata.userEmail;
+
+                // Re-save JSON with user email
+                await jsonFile.save(JSON.stringify(parsedData, null, 2), {
+                    contentType: 'application/json'
+                });
+
+                logger.info(`Added user email to result JSON for ${jobFolderPath}`);
+            }
+        } catch (error) {
+            // Silently fail if unable to add user email
+            logger.warn(`Could not add user email to result JSON for ${jobFolderPath}:`, error);
+        }
+
         if (parsedData.error) {
             if (typeof parsedData.error === 'string') {
                 metadata.error = parsedData.error;
@@ -119,6 +137,9 @@ async function handleJobCompletionQUICK(jobFilePath, status) {
 
         const parsedData = parseOutputFile(outputContent);
         
+        // Preserve user email from original metadata
+        const [jobFileMetadata] = await jobFile.getMetadata();
+
         const metadata = {
             normalTermination: parsedData.normalTermination,
             lastOutputLine: parsedData.lastOutputLine,
@@ -127,6 +148,10 @@ async function handleJobCompletionQUICK(jobFilePath, status) {
             numberAlphaElectrons: parsedData.numberAlphaElectrons,
             numberBetaElectrons: parsedData.numberBetaElectrons,
         };
+
+        if (jobFileMetadata.metadata.userEmail) {
+            metadata.userEmail = jobFileMetadata.metadata.userEmail;
+        }
 
         if (status === "ENDED") {
             //TODO: implement last step geometry saving for failed jobs

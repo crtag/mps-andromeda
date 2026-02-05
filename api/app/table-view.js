@@ -131,11 +131,28 @@ function applyFilters() {
         if (colType === 'number') {
             const operator = numericFilterOperators[field] || '=';
             const filterNum = parseFloat(filterValue);
-            
+
             if (isNaN(filterNum)) return;
-            
-            // Use built-in Tabulator filter types for numbers
-            table.addFilter(field, operator, filterNum);
+
+            // Use custom filter function to exclude empty values
+            const numericFilterFunc = function(data, filterParams) {
+                const rowValue = data[field];
+                if (rowValue === null || rowValue === undefined || rowValue === '') return false;
+
+                const numValue = parseFloat(rowValue);
+                if (isNaN(numValue)) return false;
+
+                switch(operator) {
+                    case '=': return numValue === filterNum;
+                    case '>': return numValue > filterNum;
+                    case '>=': return numValue >= filterNum;
+                    case '<': return numValue < filterNum;
+                    case '<=': return numValue <= filterNum;
+                    default: return numValue === filterNum;
+                }
+            };
+
+            table.addFilter(numericFilterFunc);
         } else if (colType === 'date') {
             // For dates, use custom filter function
             const dateFilterFunc = function(data, filterParams) {
@@ -167,8 +184,90 @@ function applyFilters() {
             
             table.addFilter(dateFilterFunc);
         } else {
-            // Use built-in "like" filter type for text (case-insensitive contains)
-            table.addFilter(field, "like", filterValue);
+            // Special handling for tags field with advanced filtering
+            if (field === 'tags') {
+                const tagsFilterFunc = function(data, filterParams) {
+                    const rowValue = data[field];
+                    if (rowValue === null || rowValue === undefined || rowValue === '') return false;
+
+                    const tagsString = String(rowValue).toLowerCase();
+                    const tagsList = tagsString.split(',').map(t => t.trim());
+
+                    // Parse filter value for AND, OR (+), and NOT (-) terms
+                    const filterTerms = filterValue.trim().split(/\s+/);
+                    const andTerms = [];
+                    const orTerms = [];
+                    const notTerms = [];
+
+                    filterTerms.forEach(term => {
+                        if (term.startsWith('-')) {
+                            // NOT term (exclude)
+                            const notTerm = term.substring(1).toLowerCase();
+                            if (notTerm) notTerms.push(notTerm);
+                        } else if (term.startsWith('+')) {
+                            // OR term
+                            const orTerm = term.substring(1).toLowerCase();
+                            if (orTerm) orTerms.push(orTerm);
+                        } else {
+                            // Default: AND term
+                            const andTerm = term.toLowerCase();
+                            if (andTerm) andTerms.push(andTerm);
+                        }
+                    });
+
+                    // Check NOT terms - exclude if any match
+                    for (const notTerm of notTerms) {
+                        if (tagsList.some(tag => tag.includes(notTerm))) {
+                            return false;
+                        }
+                    }
+
+                    // Check if row matches AND or OR criteria
+                    let matchesAnd = true;
+                    let matchesOr = false;
+
+                    // Check AND terms - ALL must match
+                    for (const andTerm of andTerms) {
+                        if (!tagsList.some(tag => tag.includes(andTerm))) {
+                            matchesAnd = false;
+                            break;
+                        }
+                    }
+
+                    // Check OR terms - at least ONE must match
+                    if (orTerms.length > 0) {
+                        matchesOr = orTerms.some(orTerm =>
+                            tagsList.some(tag => tag.includes(orTerm))
+                        );
+                    }
+
+                    // Logic:
+                    // - If only AND terms: all must match
+                    // - If only OR terms: at least one must match
+                    // - If both AND and OR: (all AND match) OR (at least one OR matches)
+                    if (andTerms.length > 0 && orTerms.length > 0) {
+                        return matchesAnd || matchesOr;
+                    } else if (andTerms.length > 0) {
+                        return matchesAnd;
+                    } else if (orTerms.length > 0) {
+                        return matchesOr;
+                    }
+
+                    return true;
+                };
+
+                table.addFilter(tagsFilterFunc);
+            } else {
+                // Use custom filter function for text to exclude empty values
+                const textFilterFunc = function(data, filterParams) {
+                    const rowValue = data[field];
+                    if (rowValue === null || rowValue === undefined || rowValue === '') return false;
+
+                    return String(rowValue).toLowerCase().includes(filterValue.toLowerCase());
+                };
+
+                table.addFilter(textFilterFunc);
+            }
         }
     });
     
@@ -1205,24 +1304,32 @@ function clearAllFilters() {
     updateFilterIndicators();
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+// Setup button listeners - handle both DOM ready and already loaded cases
+function setupButtonListeners() {
+    console.log('Setting up button listeners');
+
     document.getElementById('export-csv-btn').addEventListener('click', (e) => {
+        console.log('Export CSV button clicked');
         e.preventDefault();
         exportToCSV();
     });
-    
+
     document.getElementById('toggle-columns-btn').addEventListener('click', (e) => {
+        console.log('Toggle columns button clicked');
         e.preventDefault();
         const panel = document.getElementById('column-toggle-panel');
         panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        console.log('Panel display:', panel.style.display);
     });
-    
+
     document.getElementById('clear-filters-btn').addEventListener('click', (e) => {
+        console.log('Clear filters button clicked');
         e.preventDefault();
         clearAllFilters();
     });
-    
+
     document.getElementById('refresh-btn').addEventListener('click', (e) => {
+        console.log('Refresh button clicked');
         e.preventDefault();
         e.stopPropagation();
         loadJobData(true); // Preserve filters on refresh
@@ -1234,5 +1341,12 @@ document.addEventListener('DOMContentLoaded', () => {
             loadJobData();
         }
     });
-});
+}
+
+// Call setup immediately if DOM already loaded, otherwise wait
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupButtonListeners);
+} else {
+    setupButtonListeners();
+}
 

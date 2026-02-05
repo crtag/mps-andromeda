@@ -255,6 +255,7 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
                 
                 <div class="job-time">
                     Status: <strong>${job.status}</strong>
+                    ${job?.userEmail ? `<br>User: <strong>${job.userEmail}</strong>` : ''}
                     ${job?.tags ? `<br>Tags: <strong>${job.tags}</strong>` : ''}
                     ${job?.submitTime ? `<br>Submitted: ${new Date(job.submitTime).toLocaleString()}` : ''}    
                     ${!isCompleted && job?.startTime ? `<br>Started: ${new Date(job.startTime).toLocaleString()}` : ''}

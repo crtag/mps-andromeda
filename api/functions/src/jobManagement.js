@@ -345,6 +345,7 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
             description: req.body.description || "",
             jobFolder: jobFolderName, // Store folder name in metadata
             inputFiles: JSON.stringify(inputFiles), // List of all uploaded files
+            userEmail: req.body.userEmail || null,
         };
 
         if (dryRun) {
