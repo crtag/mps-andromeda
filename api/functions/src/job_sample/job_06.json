@@ -1,0 +1,35 @@
+{
+  "config": "water_optimize_cation",
+  "job_id": "06",
+  "xyz": "water",
+  "worker": "PySCF",
+  "charge": 1,
+  "multiplicity": 2,
+  "task": "OPTIMIZE",
+  "functional": "b3lyp",
+  "basis": "6-31g*",
+  "dispersion": "d3bj",
+  "tags": "water_optimize_cation",
+  "atoms_num": 3,
+  "electrons_num": 9,
+  "converged": true,
+  "step_count": 5,
+  "computation_time": 4.102624416351318,
+  "energy": -75.95787154776343,
+  "energy_details_ev": {
+    "total": -2066.918981109333,
+    "nuclear_repulsion": 236.01963368162174,
+    "one_electron": -3190.5347063521535,
+    "coulomb": 1130.7114688312947,
+    "xc_total": -243.09976628243606,
+    "dispersion": -0.015610987659680498
+  },
+  "max_force": 3.383242038518392e-05,
+  "rms_force": 1.805467960147068e-05,
+  "output_files": {
+    "optimized_xyz": "water_06.xyz",
+    "trajectory_xyz": "water_traj.xyz",
+    "dataset": "dataset",
+    "dataset_count": 5
+  }
+}

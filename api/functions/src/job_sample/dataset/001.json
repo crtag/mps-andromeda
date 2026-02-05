@@ -1,0 +1,80 @@
+{
+  "version": "1.1",
+  "units": {
+    "coordinates": "angstrom",
+    "energy": "hartree",
+    "forces": "hartree/bohr",
+    "dipole": "au",
+    "quadrupole": "au",
+    "charges": "e"
+  },
+  "system": {
+    "atomic_symbols": ["O", "H", "H"],
+    "coordinates": [
+      [0.0, 0.0, 0.11729999999623168],
+      [0.7569499999756826, 0.0, -0.46919999998492673],
+      [-0.7569499999756826, 0.0, -0.46919999998492673]
+    ],
+    "charge": 1,
+    "spin_multiplicity": 2,
+    "n_atoms": 3,
+    "n_electrons": 9
+  },
+  "method": {
+    "functional": "b3lyp",
+    "basis": "6-31g*",
+    "dispersion": "d3bj",
+    "scf_type": "UKS"
+  },
+  "properties": {
+    "energy": {
+      "total": -75.95185709441205,
+      "nuclear_repulsion": 9.191473667295964,
+      "kinetic": null,
+      "nuclear_electron": null,
+      "coulomb": 41.88359986795048,
+      "xc": -8.978538249957785,
+      "exact_exchange": null,
+      "dispersion": -0.0005738768527215738,
+      "homo": null,
+      "lumo": null
+    },
+    "forces": [
+      [-2.714979235871129e-16, -2.8105396263334553e-16, 0.04857942195951271],
+      [0.04779761821897452, 4.5671451054701276e-17, -0.02429388562527585],
+      [-0.04779761821897274, 6.942060450284752e-17, -0.02429388562527474]
+    ],
+    "charges": {
+      "mulliken": [-0.12883386022168253, 0.564416930110845, 0.564416930110839],
+      "lowdin": [0.1523713984676398, 0.4238143007661801, 0.4238143007661763]
+    },
+    "spin": {
+      "mulliken": [1.0499722835922922, -0.024986141796141892, -0.024986141796144334],
+      "lowdin": [1.0399757511188277, -0.019987875559409285, -0.019987875559411727],
+      "s_squared": 0.7523201679404838,
+      "contamination": 0.0023201679404838416
+    },
+    "dipole": [-3.2595454113604205e-15, -7.525963151900661e-16, -0.8983895948111084],
+    "quadrupole": [
+      [1.7244035082609113, 7.203783238925154e-16, -8.727393807639316e-15],
+      [7.203783238925154e-16, -1.1046293127160283, -5.411091725828483e-17],
+      [-8.683158359001908e-15, -5.411091725828476e-17, -0.6197741955448821]
+    ]
+  },
+  "convergence": {
+    "scf_converged": true,
+    "geometry_converged": false,
+    "optimization_steps": 1,
+    "max_force": 0.04857942195951271,
+    "rms_force": 0.030017718120177367
+  },
+  "metadata": {
+    "job_id": "06",
+    "source_xyz": "water",
+    "config_file": "water_optimize_cation",
+    "software": "GPU4PySCF",
+    "computation_time_seconds": 1.2084882259368896,
+    "timestamp": "2026-02-05T15:04:47.098614",
+    "tags": "water_optimize_cation"
+  }
+}
