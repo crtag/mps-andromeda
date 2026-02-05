@@ -337,7 +337,7 @@ function getColumnDefinitions(data) {
         if (formatter) {
             def.formatter = formatter;
         }
-        
+
         if (finalWidth) {
             def.width = finalWidth;
         }

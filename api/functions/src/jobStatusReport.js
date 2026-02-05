@@ -66,22 +66,32 @@ async function handleJobCompletionPySCF(jobFilePath, status) {
         const jsonContent = content.toString("utf8");
         const parsedData = JSON.parse(jsonContent);
 
-        // Add user email from job metadata to result JSON
+        // Add user email and tags from job metadata to result JSON
         try {
             const [jobFileMetadata] = await jobFile.getMetadata();
+            let needsSave = false;
+
             if (jobFileMetadata.metadata.userEmail && !parsedData.user_email) {
                 parsedData.user_email = jobFileMetadata.metadata.userEmail;
+                needsSave = true;
+            }
 
-                // Re-save JSON with user email
+            if (jobFileMetadata.metadata.tags && !parsedData.tags) {
+                parsedData.tags = jobFileMetadata.metadata.tags;
+                needsSave = true;
+            }
+
+            if (needsSave) {
+                // Re-save JSON with user email and tags
                 await jsonFile.save(JSON.stringify(parsedData, null, 2), {
                     contentType: 'application/json'
                 });
 
-                logger.info(`Added user email to result JSON for ${jobFolderPath}`);
+                logger.info(`Added metadata to result JSON for ${jobFolderPath}`);
             }
         } catch (error) {
-            // Silently fail if unable to add user email
-            logger.warn(`Could not add user email to result JSON for ${jobFolderPath}:`, error);
+            // Silently fail if unable to add metadata
+            logger.warn(`Could not add metadata to result JSON for ${jobFolderPath}:`, error);
         }
 
         if (parsedData.error) {

@@ -481,6 +481,45 @@ h2 > div {
 .btn-delete:hover {
     background: #ad2929;
 }
+
+.btn-edit-tags {
+    background: transparent;
+    color: #0066cc;
+    padding: 0;
+    margin: 0;
+    border: none;
+    cursor: pointer;
+    vertical-align: baseline;
+    display: inline-block;
+    line-height: 1;
+}
+
+.btn-edit-tags:hover {
+    color: #004499;
+}
+
+.btn-edit-tags svg {
+    width: 10px;
+    height: 10px;
+    vertical-align: baseline;
+    position: relative;
+    top: 1px;
+}
+
+.btn-add-tags {
+    background: transparent;
+    color: #0066cc;
+    padding: 2px 6px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.btn-add-tags:hover {
+    background: #f0f0f0;
+    border-color: #0066cc;
+}
 .form-group, .direction-group {
     margin: 20px 0 0;
 }

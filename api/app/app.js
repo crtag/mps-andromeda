@@ -26,6 +26,9 @@ const API = {
     DELETE: IS_LOCAL
         ? `${EMULATOR_BASE}/deleteJob`
         : `https://us-central1-${projectId}.cloudfunctions.net/deleteJob`,
+    UPDATE_METADATA: IS_LOCAL
+        ? `${EMULATOR_BASE}/updateJobMetadata`
+        : `https://us-central1-${projectId}.cloudfunctions.net/updateJobMetadata`,
     JOBS: {
         PENDING_DRAFT: IS_LOCAL
             ? `${EMULATOR_BASE}/listPendingJobs`
@@ -196,9 +199,42 @@ async function cancelJob(jobFolder, filename) {
     await deleteJob(jobFolder, filename, true);
 }
 
-// Make deleteJob and cancelJob globally accessible for onclick handlers
+async function editJobTags(jobFolder, currentTags) {
+    const newTags = prompt('Edit tags: ', currentTags || '');
+
+    if (newTags === null) return; // User cancelled
+
+    try {
+        const response = await fetch(API.UPDATE_METADATA, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                jobFolder: jobFolder,
+                tags: newTags.trim()
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Update failed');
+        }
+
+        showStatus('Tags updated successfully', 'success');
+        fetchJobs(); // Refresh job list
+
+    } catch (error) {
+        console.error('Error updating tags:', error);
+        showStatus(`Error updating tags: ${error.message}`, 'error');
+    }
+}
+
+// Make deleteJob, cancelJob, and editJobTags globally accessible for onclick handlers
 window.deleteJob = deleteJob;
 window.cancelJob = cancelJob;
+window.editJobTags = editJobTags;
 
 function renderLink(link) {
     const downloadAttr = link.download ? `download="${link.download}"` : '';
@@ -256,7 +292,18 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
                 <div class="job-time">
                     Status: <strong>${job.status}</strong>
                     ${job?.userEmail ? `<br>User: <strong>${job.userEmail}</strong>` : ''}
-                    ${job?.tags ? `<br>Tags: <strong>${job.tags}</strong>` : ''}
+                    ${job?.tags ? `<br>Tags: <strong>${job.tags}</strong>
+                        <button class="btn-edit-tags" onclick='editJobTags(${JSON.stringify(job.jobFolder)}, ${JSON.stringify(job.tags)})'
+                                style="margin-left: 8px;">
+                            <svg viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/>
+                                <path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5v11z"/>
+                            </svg>
+                        </button>` :
+                        `<br><button class="btn-add-tags" onclick='editJobTags(${JSON.stringify(job.jobFolder)}, "")'>
+                            + Add Tags
+                        </button>`
+                    }
                     ${job?.submitTime ? `<br>Submitted: ${new Date(job.submitTime).toLocaleString()}` : ''}    
                     ${!isCompleted && job?.startTime ? `<br>Started: ${new Date(job.startTime).toLocaleString()}` : ''}
                     ${isCompleted && job?.completionTime ? `&emsp; Completed: ${new Date(job.completionTime).toLocaleString()}` : ''}

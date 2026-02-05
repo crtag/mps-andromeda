@@ -454,6 +454,117 @@ exports.deleteJobHandler = onRequest({cors: true}, async (req, res) => {
     }
 });
 
+/**
+ * Update job metadata (tags, description)
+ * POST with body: { jobFolder, tags, description }
+ */
+exports.updateJobMetadataHandler = onRequest({cors: true}, async (req, res) => {
+    if (req.method !== "POST") {
+        res.status(405).send("Method Not Allowed");
+        return;
+    }
+
+    try {
+        const { jobFolder, tags, description } = req.body;
+
+        if (!jobFolder) {
+            res.status(400).json({ success: false, error: "jobFolder is required" });
+            return;
+        }
+
+        // Find the config file for this job
+        // Try job-specs first (pending/running jobs)
+        let configFile = null;
+        const jobSpecPrefix = `${JOBS_PREFIX}${jobFolder}/`;
+        const [specFiles] = await getBucket().getFiles({ prefix: jobSpecPrefix });
+        configFile = specFiles.find(f => f.name.endsWith('.cfg'));
+
+        // If not found, try job-results (completed jobs)
+        if (!configFile) {
+            const resultPrefix = `${RESULTS_PREFIX}${jobFolder}/`;
+            const [resultFiles] = await getBucket().getFiles({ prefix: resultPrefix });
+            configFile = resultFiles.find(f => f.name.endsWith('.cfg'));
+        }
+
+        if (!configFile) {
+            res.status(404).json({ success: false, error: "Job not found" });
+            return;
+        }
+
+        // Get existing metadata
+        const [existingMetadata] = await configFile.getMetadata();
+
+        // Optional: Check user ownership (if userEmail matches)
+        // Uncomment when ready to enforce:
+        // const userEmail = req.body.userEmail || null;
+        // if (existingMetadata.metadata.userEmail && userEmail !== existingMetadata.metadata.userEmail) {
+        //     res.status(403).json({ success: false, error: "Not authorized to edit this job" });
+        //     return;
+        // }
+
+        // Build update object with only provided fields
+        const updates = {};
+        if (tags !== undefined) updates.tags = tags;
+        if (description !== undefined) updates.description = description;
+        updates.lastUpdate = new Date().toISOString();
+
+        // Update metadata on config file
+        await configFile.setMetadata({
+            metadata: {
+                ...existingMetadata.metadata,
+                ...updates
+            }
+        });
+
+        logger.info(`Updated metadata for job ${jobFolder}`, updates);
+
+        // Also update result JSON if it exists (for completed jobs)
+        try {
+            const resultPrefix = `${RESULTS_PREFIX}${jobFolder}/`;
+            const [resultFiles] = await getBucket().getFiles({ prefix: resultPrefix });
+            const jsonFile = resultFiles.find(f => f.name.endsWith('.json'));
+
+            if (jsonFile) {
+                const [jsonContent] = await jsonFile.download();
+                const parsedData = JSON.parse(jsonContent.toString('utf8'));
+
+                // Update tags in JSON
+                if (tags !== undefined) {
+                    parsedData.tags = tags;
+                }
+                if (description !== undefined) {
+                    parsedData.description = description;
+                }
+
+                // Save updated JSON
+                await jsonFile.save(JSON.stringify(parsedData, null, 2), {
+                    contentType: 'application/json'
+                });
+
+                logger.info(`Updated result JSON for job ${jobFolder}`);
+            }
+        } catch (error) {
+            // Non-critical - result JSON might not exist yet
+            logger.warn(`Could not update result JSON for ${jobFolder}:`, error.message);
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Job metadata updated successfully",
+            jobFolder,
+            updates
+        });
+
+    } catch (error) {
+        logger.error("Error updating job metadata:", error);
+        res.status(500).json({
+            success: false,
+            error: "Failed to update job metadata",
+            details: error.message
+        });
+    }
+});
+
 exports.downloadJobFolderHandler = onRequest({cors: true}, async (req, res) => {
     if (req.method !== "GET") {
         res.status(405).send("Method Not Allowed");
