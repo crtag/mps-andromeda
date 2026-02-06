@@ -115,10 +115,12 @@
         const scripts = [
             ...firebaseScripts,
             configScript,
+            'https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.0.1/3Dmol.js',
             'modal.js',
             'config-parser.js',
             'file-viewer.js',
             'multiplicity-validator.js',
+            'xyz-viewer.js',
             'upload.js',
             'app.js'
         ];
@@ -137,5 +139,33 @@
             .catch(err => console.error('Script loading failed:', err));
     })();
     </script>
+    <!-- XYZ Viewer Modal -->
+    <div id="xyz-viewer-modal" style="display: none;">
+        <div class="xyz-modal-content">
+            <div class="xyz-modal-header">
+                <h3 id="xyz-modal-title">Molecular Structure</h3>
+                <div class="xyz-modal-header-buttons">
+                    <button id="xyz-newtab-btn" onclick="XYZViewer.openInNewTab()" style="padding: 8px 16px; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; margin-right: 10px;">Open in New Tab</button>
+                    <a id="xyz-download-btn" download="" style="padding: 8px 16px; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; text-decoration: none; margin-right: 10px;">Download</a>
+                    <button class="xyz-modal-close" onclick="XYZViewer.close()">×</button>
+                </div>
+            </div>
+            <div class="xyz-modal-body">
+                <div id="xyz-viewer-container"></div>
+                <div id="xyz-info-panel">
+                    <div id="xyz-atom-info"></div>
+                    <div id="xyz-distance-info"></div>
+                </div>
+            </div>
+            <div class="xyz-modal-controls">
+                <div id="xyz-trajectory-controls" style="display: none;">
+                    <button onclick="XYZViewer.prevFrame()">←</button>
+                    <span id="xyz-frame-info">Frame 1 / 1</span>
+                    <button onclick="XYZViewer.nextFrame()">→</button>
+                    <button id="xyz-play-btn" onclick="XYZViewer.togglePlay()">▶</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

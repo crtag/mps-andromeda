@@ -779,3 +779,115 @@ textarea {
 .btn-secondary:hover {
     background: #c0c0c0;
 }
+
+/* XYZ Viewer Modal */
+#xyz-viewer-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.xyz-modal-content {
+    background: white;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 900px;
+    height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.xyz-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.xyz-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.xyz-modal-close {
+    background: none;
+    border: none;
+    font-size: 28px;
+    cursor: pointer;
+    color: #666;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    line-height: 28px;
+}
+
+.xyz-modal-close:hover {
+    color: #000;
+}
+
+.xyz-modal-body {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: white;
+}
+
+#xyz-viewer-container {
+    flex: 1;
+    background: white;
+    position: relative;
+}
+
+#xyz-info-panel {
+    padding: 10px 20px;
+    background: #f9f9f9;
+    border-top: 1px solid #eee;
+    font-size: 14px;
+    font-family: monospace;
+    flex-shrink: 0;
+}
+
+#xyz-atom-info, #xyz-distance-info {
+    margin: 5px 0;
+    white-space: pre-line;
+}
+
+.xyz-modal-controls {
+    padding: 15px 20px;
+    border-top: 1px solid #eee;
+    text-align: center;
+}
+
+#xyz-trajectory-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+#xyz-trajectory-controls button {
+    padding: 8px 16px;
+    border: 1px solid #ccc;
+    background: white;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+#xyz-trajectory-controls button:hover {
+    background: #f0f0f0;
+}
+
+#xyz-frame-info {
+    min-width: 120px;
+    text-align: center;
+}

@@ -1,8 +1,5 @@
 # Release Notes
 
-## User Tracking and Tag Editing
-
-**Added:**
 - Jobs now track which user submitted them
 - "User" column in results table shows submitter's email
 - User email displayed on job cards in job list view
@@ -14,11 +11,7 @@
 - Download zip files named as: [xyz-filename]_[job-id].zip
 - Download button in table view Job column for quick access
 - Multiplicity validation before job submission - warns if spin state doesn't match electron count
-
-**Improved:**
-- Unified modal system with consistent styling across
 - Table filters now exclude rows with empty values
 - Fixed table button functionality issue
-
-**Notes:**
-- Existing jobs will show empty user field
+- Unified modal system with consistent styling across all dialogs
+- 3D XYZ molecular viewer with atom selection, distance measurement, trajectory playback, and "Open in New Tab" for side-by-side comparison

@@ -116,6 +116,22 @@ function getFriendlyLabel(filename) {
 }
 
 function createFileLink(filePath, text, fileType, view, tooltip = null, isOutputFile = false) {
+    const isXYZ = filePath.toLowerCase().endsWith('.xyz');
+
+    // For XYZ files in results, open in 3D viewer instead of text viewer
+    if (isXYZ && fileType === 'result') {
+        const filename = filePath.split('/').pop();
+        // Get raw file URL (without view=true) for 3D viewer
+        const rawUrl = getFileUrl(filePath, fileType, false);
+        return {
+            url: '#',
+            text,
+            onclick: `XYZViewer.open('${rawUrl}', '${filename}'); return false;`,
+            tooltip: `${filename}`,
+            isOutputFile: isOutputFile
+        };
+    }
+
     const url = getFileUrl(filePath, fileType, view);
     return {
         url,
@@ -329,9 +345,10 @@ window.editJobTags = editJobTags;
 
 function renderLink(link) {
     const downloadAttr = link.download ? `download="${link.download}"` : '';
+    const onclickAttr = link.onclick ? `onclick="${link.onclick}"` : '';
     const tooltipAttr = link.tooltip ? (link.isOutputFile ? `data-tooltip="${link.tooltip}"` : `title="${link.tooltip}"`) : '';
     const classAttr = link.isOutputFile ? 'class="output-file-link"' : '';
-    return `<a href="${link.url}" ${downloadAttr} ${tooltipAttr} ${classAttr} target="_blank">${link.text}</a>`;
+    return `<a href="${link.url}" ${downloadAttr} ${onclickAttr} ${tooltipAttr} ${classAttr} target="_blank">${link.text}</a>`;
 }
 
 function updateJobsList(sectionId, jobs, isCompleted = false) {
