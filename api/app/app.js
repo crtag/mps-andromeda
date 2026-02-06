@@ -228,7 +228,7 @@ async function fetchJobs() {
         const completed = jobsWithResults.filter(job => job.status != 'RUNNING');
         const running = jobsWithResults.filter(job => job.status === 'RUNNING');
 
-        updateJobsList('running-jobs', running);
+        updateJobsList('running-jobs', running, true);
         updateJobsList('completed-jobs', completed, true);
     } catch (error) {
         console.error('Error fetching jobs:', error);
