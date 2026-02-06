@@ -156,6 +156,20 @@ async function listCompletedAndRunningJobs(limit = 10) {
             if (jobMetadata.outputFiles) {
                 try {
                     jobMetadata.outputFiles = JSON.parse(jobMetadata.outputFiles);
+
+                    // Filter dataset files: only include last frame, exclude all others
+                    const datasetFiles = jobMetadata.outputFiles.filter(f => f.startsWith('dataset/') && f.endsWith('.json'));
+                    if (datasetFiles.length > 0) {
+                        // Sort to get last frame (e.g., 005.json is last)
+                        datasetFiles.sort();
+                        const lastFrame = datasetFiles[datasetFiles.length - 1];
+
+                        // Remove all dataset files
+                        jobMetadata.outputFiles = jobMetadata.outputFiles.filter(f => !f.startsWith('dataset/'));
+
+                        // Add back only the last frame
+                        jobMetadata.outputFiles.push(lastFrame);
+                    }
                 } catch (e) {
                     logger.warn(`Failed to parse outputFiles for ${jobFolder}`, e);
                     jobMetadata.outputFiles = [];
@@ -202,6 +216,8 @@ async function getAllJobJsonData(limit = 75) {
         const allFiles = await listFilesWithQuery(RESULTS_PREFIX);
         const jsonFiles = allFiles.filter(file => {
             const pathParts = file.name.replace(RESULTS_PREFIX, "").split("/");
+            // Only include main job JSON files (job_xxxxx/job_XX.json)
+            // Exclude dataset files (job_xxxxx/dataset/XXX.json) which have 3 path parts
             return pathParts.length === 2 && file.name.endsWith('.json');
         });
 

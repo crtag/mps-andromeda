@@ -89,6 +89,11 @@ function shouldViewFile(filename) {
 function getFriendlyLabel(filename) {
     const lower = filename.toLowerCase();
 
+    // Check for dataset files (e.g., dataset/005.json)
+    if (lower.startsWith('dataset/') && lower.endsWith('.json')) {
+        return 'DATASET';
+    }
+
     // Check for trajectory files
     if (lower.endsWith('traj.xyz')) {
         return 'TRAJECTORY';
