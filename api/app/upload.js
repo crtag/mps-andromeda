@@ -547,7 +547,21 @@ const UploadModule = (function() {
         if (isUploading || !fileState.config) {
             return;
         }
-        
+
+        // Validate multiplicity before proceeding
+        const validationError = checkMultiplicity();
+
+        if (validationError) {
+            // Show popup and wait for user decision
+            const shouldContinue = await showMultiplicityWarning(validationError);
+
+            if (!shouldContinue) {
+                // User clicked Cancel - abort job creation, keep files
+                return;
+            }
+            // User clicked Continue - proceed with job creation
+        }
+
         const expectedFiles = fileState.config.expectedFiles || [];
         const uploadedByType = getFilesByExpectedType(expectedFiles);
         
@@ -607,6 +621,46 @@ const UploadModule = (function() {
             isUploading = false;
             updateConfirmButton();
         }
+    }
+
+    function checkMultiplicity() {
+        // Check if we have both config and XYZ
+        if (!fileState.config) {
+            return null;
+        }
+
+        const xyzFile = fileState.uploadedFiles.find(f =>
+            f.type === 'xyz' && f.isExpected && f.content
+        );
+
+        if (!xyzFile) {
+            return null;
+        }
+
+        try {
+            const xyzContent = atob(xyzFile.content);
+            const atoms = parseXYZ(xyzContent);
+            const charge = fileState.config.info?.charge ?? 0;
+            const multiplicity = fileState.config.info?.multiplicity ?? 1;
+
+            const result = validateMolecule(atoms, charge, multiplicity);
+
+            return result.valid ? null : result.error;
+        } catch (error) {
+            // Parsing failed - skip validation
+            return null;
+        }
+    }
+
+    function showMultiplicityWarning(errorMessage) {
+        return new Promise((resolve) => {
+            Modal.warning(
+                'Multiplicity Warning',
+                errorMessage,
+                () => resolve(true),
+                () => resolve(false)
+            );
+        });
     }
 
     function resetFiles() {

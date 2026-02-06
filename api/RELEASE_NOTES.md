@@ -13,8 +13,10 @@
 - Dataset folder support - displays last optimization frame as DATASET link
 - Download zip files named as: [xyz-filename]_[job-id].zip
 - Download button in table view Job column for quick access
+- Multiplicity validation before job submission - warns if spin state doesn't match electron count
 
 **Improved:**
+- Unified modal system with consistent styling across
 - Table filters now exclude rows with empty values
 - Fixed table button functionality issue
 
