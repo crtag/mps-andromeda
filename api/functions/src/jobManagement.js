@@ -330,8 +330,11 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
         const originalConfigFilename = configFilename;
         const originalXyzFilename = xyzFilename;
 
-        // Collect all uploaded filenames
-        const inputFiles = [originalConfigFilename, ...Object.keys(files)];
+        // Collect all uploaded filenames - order: xyz files, cfg, then rest
+        const allFiles = Object.keys(files);
+        const xyzFiles = allFiles.filter(f => f.toLowerCase().endsWith('.xyz'));
+        const otherFiles = allFiles.filter(f => !f.toLowerCase().endsWith('.xyz') && f !== originalConfigFilename);
+        const inputFiles = [...xyzFiles, originalConfigFilename, ...otherFiles];
 
         // Create metadata for config file (main job file)
         const metadata = {
@@ -594,8 +597,18 @@ exports.downloadJobFolderHandler = onRequest({cors: true}, async (req, res) => {
             return;
         }
 
+        // Get original xyz filename from config metadata
+        const configFile = resultFiles.find(f => f.name.endsWith('.cfg'));
+        let xyzName = jobFolder;
+        if (configFile) {
+            const [metadata] = await configFile.getMetadata();
+            xyzName = metadata.metadata?.xyz?.replace(/\.xyz$/, '') || jobFolder;
+        }
+        const jobId = jobFolder.replace('job_', '');
+        const zipFilename = `${xyzName}_${jobId}.zip`;
+
         res.setHeader("Content-Type", "application/zip");
-        res.setHeader("Content-Disposition", `attachment; filename="${jobFolder}.zip"`);
+        res.setHeader("Content-Disposition", `attachment; filename="${zipFilename}"`);
 
         const archive = archiver("zip", {
             zlib: { level: 9 },

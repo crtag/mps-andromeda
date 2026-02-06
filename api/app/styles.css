@@ -5,6 +5,31 @@ html, body {
     padding: 0;
 }
 
+/* Instant tooltips for output file links - grey rounded button style */
+.output-file-link {
+    position: relative;
+}
+
+.output-file-link:hover::after {
+    content: attr(title);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 8px 16px;
+    background: #6c757d;
+    color: white;
+    font-size: 13px;
+    white-space: nowrap;
+    border-radius: 6px;
+    z-index: 1000;
+    pointer-events: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    min-width: 100%;
+    text-align: center;
+    box-sizing: border-box;
+}
+
 /* Authentication styles */
 #auth-container {
     display: flex;

@@ -86,12 +86,38 @@ function shouldViewFile(filename) {
     return VIEW_FILE_EXTENSIONS.includes(extension);
 }
 
-function createFileLink(filePath, text, fileType, view) {
+function getFriendlyLabel(filename) {
+    const lower = filename.toLowerCase();
+
+    // Check for trajectory files
+    if (lower.endsWith('traj.xyz')) {
+        return 'TRAJECTORY';
+    }
+
+    // Map by extension
+    const ext = filename.split('.').pop()?.toLowerCase();
+    const labelMap = {
+        'xyz': 'XYZ',
+        'json': 'JSON',
+        'log': 'LOG',
+        'out': 'OUT',
+        'molden': 'MOLDEN',
+        'cube': 'CUBE',
+        'checkpoint': 'CHECKPOINT',
+        'chk': 'CHECKPOINT'
+    };
+
+    return labelMap[ext] || filename;
+}
+
+function createFileLink(filePath, text, fileType, view, tooltip = null, isOutputFile = false) {
     const url = getFileUrl(filePath, fileType, view);
     return {
         url,
         text,
-        download: view ? null : text
+        download: view ? null : text,
+        tooltip: tooltip || text,
+        isOutputFile: isOutputFile
     };
 }
 
@@ -117,15 +143,60 @@ function getDownloadLinks(job, isComplete) {
         }
     } else {
         if (job.inputFiles?.length) {
-            job.inputFiles.forEach(filename => {
+            // Sort files: xyz first, then cfg, then rest
+            const xyzFiles = job.inputFiles.filter(f => f.toLowerCase().endsWith('.xyz'));
+            const cfgFiles = job.inputFiles.filter(f => f.toLowerCase().endsWith('.cfg'));
+            const otherFiles = job.inputFiles.filter(f => !f.toLowerCase().endsWith('.xyz') && !f.toLowerCase().endsWith('.cfg'));
+            const sortedFiles = [...xyzFiles, ...cfgFiles, ...otherFiles];
+
+            sortedFiles.forEach(filename => {
                 const filePath = `${job.jobFolder}/${filename}`;
-                inputLinks.push(createFileLink(filePath, filename, type, shouldViewFile(filename)));
+                const lower = filename.toLowerCase();
+                let label = filename;
+                let tooltip = null;
+                let isStyledFile = false;
+
+                // Style xyz files - keep filename but change extension to uppercase, add tooltip, bold filename
+                if (lower.endsWith('.xyz')) {
+                    const name = filename.replace(/\.xyz$/i, '');
+                    label = `<strong>${name}</strong>.XYZ`;
+                    tooltip = filename;
+                    isStyledFile = true;
+                }
+                // Style cfg files as "CONFIG" with tooltip
+                else if (lower.endsWith('.cfg')) {
+                    label = 'CONFIG';
+                    tooltip = filename;
+                    isStyledFile = true;
+                }
+                // Style chk files as "CHECKPOINT" with tooltip
+                else if (lower.endsWith('.chk')) {
+                    label = 'CHECKPOINT';
+                    tooltip = filename;
+                    isStyledFile = true;
+                }
+
+                inputLinks.push(createFileLink(filePath, label, type, shouldViewFile(filename), tooltip, isStyledFile));
             });
         }
         if (job.outputFiles?.length) {
+            // Sort output files: recognized types first, unknown last
+            const recognizedFiles = [];
+            const unknownFiles = [];
+
             job.outputFiles.forEach(filename => {
+                const label = getFriendlyLabel(filename);
+                if (label === filename) {
+                    unknownFiles.push(filename);
+                } else {
+                    recognizedFiles.push(filename);
+                }
+            });
+
+            [...recognizedFiles, ...unknownFiles].forEach(filename => {
                 const filePath = `${job.jobFolder}/${filename}`;
-                outputLinks.push(createFileLink(filePath, filename, 'result', shouldViewFile(filename)));
+                const label = getFriendlyLabel(filename);
+                outputLinks.push(createFileLink(filePath, label, 'result', shouldViewFile(filename), filename, true));
             });
         }
     }
@@ -238,7 +309,9 @@ window.editJobTags = editJobTags;
 
 function renderLink(link) {
     const downloadAttr = link.download ? `download="${link.download}"` : '';
-    return `<a href="${link.url}" ${downloadAttr} target="_blank">${link.text}</a>`;
+    const tooltipAttr = link.tooltip ? `title="${link.tooltip}"` : '';
+    const classAttr = link.isOutputFile ? 'class="output-file-link"' : '';
+    return `<a href="${link.url}" ${downloadAttr} ${tooltipAttr} ${classAttr} target="_blank">${link.text}</a>`;
 }
 
 function updateJobsList(sectionId, jobs, isCompleted = false) {
@@ -266,7 +339,7 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
             <div class="job-item">
                 <div class="job-filename">
                     ${isCompleted && job.jobFolder ? `
-                        <a href="${API.DOWNLOAD_FOLDER}?jobFolder=${encodeURIComponent(job.jobFolder)}" class="btn-download-folder" title="Download folder" download="${job.jobFolder}.zip">
+                        <a href="${API.DOWNLOAD_FOLDER}?jobFolder=${encodeURIComponent(job.jobFolder)}" class="btn-download-folder" title="Download folder" download="${(job.filename || job.jobFolder).replace(/\.(xyz|cfg)$/, '')}_${job.jobFolder.replace('job_', '')}.zip">
                             <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTUgMTlIMTkiIHN0cm9rZT0iIzAwNjZjYyIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPHBhdGggZD0iTTUgMTlWMTciIHN0cm9rZT0iIzAwNjZjYyIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPHBhdGggZD0iTTE5IDE5VjE3IiBzdHJva2U9IiMwMDY2Y2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CjxwYXRoIGQ9Ik0xMiA4VjE2IiBzdHJva2U9IiMwMDY2Y2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CjxwYXRoIGQ9Ik05IDEzTDEyIDE2TDE1IDEzIiBzdHJva2U9IiMwMDY2Y2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPg==" alt="download">
                         </a>
                     ` : ''}
@@ -299,13 +372,13 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
                     ${job?.userEmail ? `<br>User: <strong>${job.userEmail}</strong>` : ''}
                     ${job?.tags ? `<br>Tags: <strong>${job.tags}</strong>
                         <button class="btn-edit-tags" onclick='editJobTags(${JSON.stringify(job.jobFolder)}, ${JSON.stringify(job.tags)})'
-                                style="margin-left: 8px;">
+                                style="margin-left: 8px;" title="Edit tags">
                             <svg viewBox="0 0 16 16" fill="currentColor">
                                 <path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/>
                                 <path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5v11z"/>
                             </svg>
                         </button>` :
-                        `<br><button class="btn-add-tags" onclick='editJobTags(${JSON.stringify(job.jobFolder)}, "")'>
+                        `<br><button class="btn-add-tags" onclick='editJobTags(${JSON.stringify(job.jobFolder)}, "")' title="Add tags">
                             + Add Tags
                         </button>`
                     }
