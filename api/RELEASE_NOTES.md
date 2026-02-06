@@ -12,6 +12,7 @@
 - Friendly display labels for output files (XYZ, JSON, LOG, OUT, TRAJECTORY, DATASET, etc.)
 - Dataset folder support - displays last optimization frame as DATASET link
 - Download zip files named as: [xyz-filename]_[job-id].zip
+- Download button in table view Job column for quick access
 
 **Improved:**
 - Table filters now exclude rows with empty values
