@@ -447,6 +447,45 @@ h2 > div {
     height: 24px;
 }
 
+.btn-delete-text {
+    float: right;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+    display: inline-block;
+    margin-left: 10px;
+    position: relative;
+    top: 1px;
+    color: #dc3545;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    vertical-align: baseline;
+}
+
+.btn-delete-text:hover {
+    color: #c82333;
+}
+
+.btn-delete-inline {
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+    margin-left: 8px;
+    vertical-align: middle;
+    display: inline-block;
+}
+
+.btn-delete-inline svg {
+    vertical-align: middle;
+}
+
+.btn-delete-inline:hover svg path {
+    stroke: #c82333;
+}
+
 .job-actions {
     margin-top: 5px;
     padding-top: 0;

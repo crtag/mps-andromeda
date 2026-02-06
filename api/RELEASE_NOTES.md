@@ -8,6 +8,7 @@
 - User email displayed on job cards in job list view
 - Advanced tag filtering with AND/OR/NOT logic (default: AND, +: OR, -: NOT)
 - Ability to edit tags after job creation (from job cards)
+- Delete button now available for failed jobs
 
 **Improved:**
 - Table filters now exclude rows with empty values

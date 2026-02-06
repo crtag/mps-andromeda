@@ -270,10 +270,15 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
                             <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTUgMTlIMTkiIHN0cm9rZT0iIzAwNjZjYyIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPHBhdGggZD0iTTUgMTlWMTciIHN0cm9rZT0iIzAwNjZjYyIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPHBhdGggZD0iTTE5IDE5VjE3IiBzdHJva2U9IiMwMDY2Y2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CjxwYXRoIGQ9Ik0xMiA4VjE2IiBzdHJva2U9IiMwMDY2Y2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CjxwYXRoIGQ9Ik05IDEzTDEyIDE2TDE1IDEzIiBzdHJva2U9IiMwMDY2Y2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPg==" alt="download">
                         </a>
                     ` : ''}
+                    ${(job.status === 'PENDING' || job.status === 'FAILED') ? `
+                        <button class="btn-delete-text" onclick='deleteJob(${JSON.stringify(job.jobFolder)}, ${JSON.stringify(job.filename)})' title="Delete job">
+                            DELETE
+                        </button>
+                    ` : ''}
                     ${legacyInLink ? renderLink(legacyInLink) : (job.jobFolder || '')}
                     
                     ${isCompleted && job?.normalTermination ?
-                        job.normalTermination === 'true' ?  
+                        job.normalTermination === 'true' ?
                             `<span class="normal-termination true">&#10004; SUCCESSFUL RUN</span>` :
                             `<span class="normal-termination false">&#9888; ERROR RUN</span>` : ''
                     }
@@ -330,7 +335,6 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
                 }
 
                 <div class="job-actions">
-                    ${job.status === 'PENDING' ? `<button class="btn-delete" onclick='deleteJob(${JSON.stringify(job.jobFolder)}, ${JSON.stringify(job.filename)})'>Delete</button>` : ''}
                 </div>
 
                 <div class="job-results">

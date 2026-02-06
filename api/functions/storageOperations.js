@@ -552,11 +552,22 @@ async function moveJobToTrajectory(filename) {
 
 async function deleteJob(jobFolder) {
     try {
-        // Check both JOBS_PREFIX and RESULTS_PREFIX for the folder
-        let folderPrefix = `${JOBS_PREFIX}${jobFolder}/`;
-        let [files] = await getBucket().getFiles({ prefix: folderPrefix });
-        
-        logger.info(`Deleting ${files.length} files from folder ${jobFolder}`);
+        // Try job-specs first (pending jobs)
+        let [files] = await getBucket().getFiles({ prefix: `${JOBS_PREFIX}${jobFolder}/` });
+
+        // If not found, try job-results (failed/completed jobs)
+        if (!files || files.length === 0) {
+            [files] = await getBucket().getFiles({ prefix: `${RESULTS_PREFIX}${jobFolder}/` });
+        }
+
+        // If still empty, job not found
+        if (!files || files.length === 0) {
+            logger.warn(`No files found for job folder ${jobFolder}`);
+            return false;
+        }
+
+        // Delete files
+        logger.info(`Deleting ${files.length} files from ${jobFolder}`);
         await Promise.all(files.map(f => f.delete()));
         return true;
     } catch (error) {
