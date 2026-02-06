@@ -4,7 +4,7 @@
 const COLUMN_CONFIG = {
     // Core identifiers
     'job': {
-        displayName: 'Job ID',
+        displayName: 'Job',
         type: 'string',
         visible: true,
         width: 200
@@ -12,7 +12,7 @@ const COLUMN_CONFIG = {
     'user_email': {
         displayName: 'User',
         type: 'string',
-        visible: true,
+        visible: false,
         width: 200
     },
     'completed': {

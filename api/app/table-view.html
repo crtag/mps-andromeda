@@ -117,6 +117,13 @@
             border-radius: 4px;
             margin: 20px;
         }
+        /* Remove hand cursor from table cells, only show on download icon */
+        .tabulator-cell {
+            cursor: default !important;
+        }
+        .tabulator-cell img[alt="download"] {
+            cursor: pointer !important;
+        }
     </style>
 </head>
 <body>

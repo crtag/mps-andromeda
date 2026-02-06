@@ -17,7 +17,10 @@ if (IS_LOCAL) {
 const API = {
     GET_ALL_JSON: IS_LOCAL
         ? `${EMULATOR_BASE}/getAllJobJsonData`
-        : `https://us-central1-${projectId}.cloudfunctions.net/getAllJobJsonData`
+        : `https://us-central1-${projectId}.cloudfunctions.net/getAllJobJsonData`,
+    DOWNLOAD_FOLDER: IS_LOCAL
+        ? `${EMULATOR_BASE}/downloadJobFolder`
+        : `https://us-central1-${projectId}.cloudfunctions.net/downloadJobFolder`
 };
 
 const COLUMN_PREFERENCE_COOKIE = 'job_table_column_visibility';
@@ -324,16 +327,38 @@ function getColumnDefinitions(data) {
             def.sorter = function(a, b, aRow, bRow, column, dir, sorterParams) {
                 const dateA = new Date(a);
                 const dateB = new Date(b);
-                
+
                 // Handle invalid dates
                 if (isNaN(dateA.getTime()) && isNaN(dateB.getTime())) return 0;
                 if (isNaN(dateA.getTime())) return -1;
                 if (isNaN(dateB.getTime())) return 1;
-                
+
                 return dateA.getTime() - dateB.getTime();
             };
         }
-        
+
+        // For job column, add download icon
+        if (field === 'job') {
+            def.formatter = function(cell, formatterParams, onRendered) {
+                const jobId = cell.getValue();
+                if (!jobId) return '';
+
+                const downloadIcon = '<img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTUgMTlIMTkiIHN0cm9rZT0iIzAwNjZjYyIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPHBhdGggZD0iTTUgMTlWMTciIHN0cm9rZT0iIzAwNjZjYyIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPHBhdGggZD0iTTE5IDE5VjE3IiBzdHJva2U9IiMwMDY2Y2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CjxwYXRoIGQ9Ik0xMiA4VjE2IiBzdHJva2U9IiMwMDY2Y2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CjxwYXRoIGQ9Ik05IDEzTDEyIDE2TDE1IDEzIiBzdHJva2U9IiMwMDY2Y2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPg==" alt="download" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 8px; cursor: pointer;" title="Download job folder">';
+
+                return `<span>${downloadIcon}${jobId}</span>`;
+            };
+
+            // Make download icon clickable
+            def.cellClick = function(e, cell) {
+                const target = e.target;
+                if (target.tagName === 'IMG') {
+                    const jobId = cell.getValue();
+                    const downloadUrl = `${API.DOWNLOAD_FOLDER}?jobFolder=${encodeURIComponent(jobId)}`;
+                    window.location.href = downloadUrl;
+                }
+            };
+        }
+
         if (formatter) {
             def.formatter = formatter;
         }
@@ -545,10 +570,10 @@ function updateColumnTogglePanel() {
     const activeElementType = activeElement?.tagName === 'SELECT' ? 'select' : (activeElement?.tagName === 'INPUT' && activeElement?.type !== 'checkbox') ? 'input' : null;
     const activeValue = activeElement?.value || '';
     const activeSelectionStart = activeElement?.selectionStart || null;
-    
+
     panel.innerHTML = '';
     filterElements = {};
-    
+
     // Create drop indicator line (will be positioned dynamically)
     const dropIndicator = document.createElement('hr');
     dropIndicator.id = 'drop-indicator';
@@ -898,11 +923,32 @@ function updateColumnTogglePanel() {
             filterContainer.appendChild(filterInput);
         }
         
+        // Add inline hints for specific fields - append to filterContainer
+        if (field === 'job') {
+            const hint = document.createElement('span');
+            hint.style.fontSize = '11px';
+            hint.style.color = '#999';
+            hint.style.fontStyle = 'italic';
+            hint.style.marginLeft = '8px';
+            hint.style.whiteSpace = 'nowrap';
+            hint.textContent = 'Includes download functionality';
+            filterContainer.appendChild(hint);
+        } else if (field === 'tags') {
+            const hint = document.createElement('span');
+            hint.style.fontSize = '11px';
+            hint.style.color = '#999';
+            hint.style.fontStyle = 'italic';
+            hint.style.marginLeft = '8px';
+            hint.style.whiteSpace = 'nowrap';
+            hint.textContent = 'Supports multi-tag search: term (AND), +term (OR), -term (NOT)';
+            filterContainer.appendChild(hint);
+        }
+
         row.appendChild(dragHandle);
         row.appendChild(checkbox);
         row.appendChild(fieldName);
         row.appendChild(filterContainer);
-        
+
         panel.appendChild(row);
     });
     
