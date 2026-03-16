@@ -260,7 +260,7 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
         const configData = parseConfigFile(configContent);
         
         // Supported workers list
-        const supportedWorkers = ["PySCF", "QUICK"]; //  "UMA"
+        const supportedWorkers = ["PySCF", "QUICK", "UMA"];
         
         // Extract worker from config, trim whitespace and normalize
         const workerRaw = configData.worker ? configData.worker.trim() : null;
@@ -291,6 +291,12 @@ exports.uploadJobSpecHandler = onRequest({cors: true}, async (req, res) => {
             if (configData?.task) parts.push(configData.task);
             if (configData?.functional) parts.push(configData.functional);
             if (configData?.basis) parts.push(configData.basis);
+            parts.push(`CHARGE=${configData?.charge ?? 0}`);
+            parts.push(`MULTIPLICITY=${configData?.multiplicity ?? 1}`);
+            jobSpec = parts.length > 0 ? parts.join(" ") : null;
+        } else if (worker === "UMA") {
+            const parts = [];
+            if (configData?.task) parts.push(configData.task);
             parts.push(`CHARGE=${configData?.charge ?? 0}`);
             parts.push(`MULTIPLICITY=${configData?.multiplicity ?? 1}`);
             jobSpec = parts.length > 0 ? parts.join(" ") : null;

@@ -136,15 +136,16 @@ function createXYZViewerCore(containerId, infoId, distanceInfoId, frameInfoId) {
             this.viewer.removeAllShapes();
 
             // Highlight selected atoms with labels
-            this.selectedAtoms.forEach((atom, index) => {
+            this.selectedAtoms.forEach((atom) => {
                 // Highlight atom
                 this.viewer.setStyle(
                     {serial: atom.serial},
                     {stick: {}, sphere: {radius: 0.4, color: 'magenta'}}
                 );
 
-                // Add label with number and element (e.g., "1:\nC")
-                const labelText = `${index + 1}:\n${atom.elem}`;
+                // Add label with atom index from XYZ (1-based) and element
+                const atomIndex = atom.serial + 1;
+                const labelText = `#${atomIndex}\n${atom.elem}`;
                 this.viewer.addLabel(labelText, {
                     position: {x: atom.x, y: atom.y, z: atom.z},
                     backgroundColor: 'magenta',
@@ -172,7 +173,7 @@ function createXYZViewerCore(containerId, infoId, distanceInfoId, frameInfoId) {
 
         // Show atom information
         showAtomInfo(atom) {
-            const info = `Atom 1: ${atom.elem} at (${atom.x.toFixed(2)}, ${atom.y.toFixed(2)}, ${atom.z.toFixed(2)}) Å`;
+            const info = `Atom #${atom.serial + 1}: ${atom.elem} at (${atom.x.toFixed(2)}, ${atom.y.toFixed(2)}, ${atom.z.toFixed(2)}) Å`;
             document.getElementById(this.infoId).textContent = info;
             if (this.distanceInfoId) {
                 document.getElementById(this.distanceInfoId).textContent = '';
@@ -187,8 +188,8 @@ function createXYZViewerCore(containerId, infoId, distanceInfoId, frameInfoId) {
             const dz = atom1.z - atom2.z;
             const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
 
-            const info1 = `Atom 1: ${atom1.elem} at (${atom1.x.toFixed(2)}, ${atom1.y.toFixed(2)}, ${atom1.z.toFixed(2)}) Å`;
-            const info2 = `Atom 2: ${atom2.elem} at (${atom2.x.toFixed(2)}, ${atom2.y.toFixed(2)}, ${atom2.z.toFixed(2)}) Å`;
+            const info1 = `Atom #${atom1.serial + 1}: ${atom1.elem} at (${atom1.x.toFixed(2)}, ${atom1.y.toFixed(2)}, ${atom1.z.toFixed(2)}) Å`;
+            const info2 = `Atom #${atom2.serial + 1}: ${atom2.elem} at (${atom2.x.toFixed(2)}, ${atom2.y.toFixed(2)}, ${atom2.z.toFixed(2)}) Å`;
             const distInfo = `Distance: ${distance.toFixed(3)} Å`;
 
             document.getElementById(this.infoId).textContent = `${info1}\n${info2}\n${distInfo}`;

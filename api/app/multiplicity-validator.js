@@ -14,8 +14,11 @@ function parseXYZ(xyzString) {
     .trim()
     .split('\n')
     .slice(2)
-    .map(line => line.trim().split(/\s+/)[0])
-    .filter(s => s && s in ATOMIC_NUMBERS);
+    .map(line => {
+      const tok = line.trim().split(/\s+/)[0] || '';
+      return tok.charAt(0).toUpperCase() + tok.slice(1).toLowerCase();
+    })
+    .filter(s => s in ATOMIC_NUMBERS);
 }
 
 function validateMolecule(atoms, charge, spinMultiplicity) {

@@ -48,6 +48,16 @@ const API = {
 console.log('API URLs configured:', API);
 
 const REFRESH_INTERVAL = 300000; // 300 seconds
+function formatDuration(ms) {
+    const d = luxon.Duration.fromMillis(ms).shiftTo('days','hours','minutes','seconds');
+    const parts = [];
+    if (d.days > 0) parts.push(d.days + ' days');
+    if (d.hours > 0) parts.push(d.hours + ' hrs');
+    if (d.minutes > 0) parts.push(d.minutes + ' mins');
+    parts.push(Math.round(d.seconds) + ' secs');
+    return parts.join(' ');
+}
+
 const COMPLETED_JOBS_LIMIT = 75;
 
 // File extensions that should be viewed (not downloaded)
@@ -423,16 +433,13 @@ function updateJobsList(sectionId, jobs, isCompleted = false) {
                             </svg>
                         </button>`
                     }
-                    ${job?.submitTime ? `<br>Submitted: ${new Date(job.submitTime).toLocaleString()}` : ''}    
-                    ${!isCompleted && job?.startTime ? `<br>Started: ${new Date(job.startTime).toLocaleString()}` : ''}
-                    ${isCompleted && job?.completionTime ? `&emsp; Completed: ${new Date(job.completionTime).toLocaleString()}` : ''}
+                    ${!isCompleted && job?.submitTime ? `<br>Submitted: ${new Date(job.submitTime).toLocaleString()}` : ''}
+                    ${job?.startTime ? `<br>Started: ${new Date(job.startTime).toLocaleString()}` : ''}
+                    ${job?.completionTime ? `&emsp; Completed: ${new Date(job.completionTime).toLocaleString()}` : ''}
+                    ${job?.startTime && job?.completionTime ? `&emsp; Run time: ${formatDuration(new Date(job.completionTime).getTime() - new Date(job.startTime).getTime())}` : ''}
 
-                    ${!isCompleted && job.status !== 'PENDING' && job?.lastUpdate ? `<br>Last updated: ${new Date(job.lastUpdate).toLocaleString()}` : ''}
-
-                    ${(!isCompleted && job?.startTime && job?.lastUpdate) ? `<br>Run duration: 
-                        ${luxon.Duration
-                            .fromMillis(new Date(job.lastUpdate).getTime() - new Date(job.startTime).getTime())
-                            .toFormat("d 'days' h 'hrs' m 'mins'")}` : ''}
+                    ${job.status === 'RUNNING' && job?.lastUpdate ? `<br>Last updated: ${new Date(job.lastUpdate).toLocaleString()}` : ''}
+                    ${job.status === 'RUNNING' && job?.startTime && job?.lastUpdate ? `&emsp; Elapsed: ${formatDuration(new Date(job.lastUpdate).getTime() - new Date(job.startTime).getTime())}` : ''}
                     
                 </div>
 

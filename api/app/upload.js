@@ -363,7 +363,7 @@ const UploadModule = (function() {
         // Update info string display
         if (elements.infoDisplay) {
             if (fileState.config && fileState.config.info) {
-                elements.infoDisplay.textContent = fileState.config.info;
+                elements.infoDisplay.textContent = fileState.config.info.display;
                 elements.infoDisplay.style.display = 'block';
             } else {
                 elements.infoDisplay.style.display = 'none';

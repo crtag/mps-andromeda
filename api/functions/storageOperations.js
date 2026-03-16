@@ -15,17 +15,11 @@ const TRAJECTORY_PREFIX = "job-trajectories/";
 
 // Get default bucket reference
 const getBucket = () => {
-    // const red = '\x1b[31m';
-    // const green = '\x1b[32m';
-    // const reset = '\x1b[0m'; // Resets color to default
-
-    // if ('true' === process.env.FUNCTIONS_EMULATOR) {
-    //     // console.log(green + "Using dev storage bucket: mps-andromeda-dev" + reset);
-    //     // dealing with the dev environment
-    //     const bucketName = "mps-andromeda-dev";
-    //     return storage.bucket(bucketName);
-    // }
-    // console.log(red + "Using production storage bucket" + reset);
+    // TEMPORARY LOCAL FIX — do NOT commit
+    // Emulator auto-injects legacy .appspot.com bucket name, but dev bucket is .firebasestorage.app
+    if ('true' === process.env.FUNCTIONS_EMULATOR) {
+        return storage.bucket("simulations-26-dev.firebasestorage.app");
+    }
     return storage.bucket()
 };
 

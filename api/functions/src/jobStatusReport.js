@@ -40,7 +40,7 @@ async function updateOutputFiles(jobFilePath) {
     }
 }
 
-async function handleJobCompletionPySCF(jobFilePath, status) {
+async function handleJobCompletionJSON(jobFilePath, status) {
     const jobFolderPath = jobFilePath.split("/").slice(0, -1).join("/");
     const [jobFiles] = await getBucket().getFiles({ prefix: jobFolderPath });
     const jobFile = jobFiles.find(f => f.name === jobFilePath);
@@ -53,14 +53,14 @@ async function handleJobCompletionPySCF(jobFilePath, status) {
 
     try {
         if (!jsonFile) {
-            logger.warn(`handleJobCompletionPySCF: No JSON file found for ${status.toLowerCase()} job ${jobFolderPath}`);
+            logger.warn(`handleJobCompletionJSON: No JSON file found for ${status.toLowerCase()} job ${jobFolderPath}`);
             metadata.error = "Server Error: No result file found.";
             metadata.status = "FAILED";
             metadata.normalTermination = false;
             await updateFileMeta(jobFile, metadata);
             return;
         }
-        logger.info(`handleJobCompletionPySCF: Extracting metadata from JSON file for ${jobFolderPath}`);
+        logger.info(`handleJobCompletionJSON: Extracting metadata from JSON file for ${jobFolderPath}`);
         
         const [content] = await jsonFile.download();
         const jsonContent = content.toString("utf8");
@@ -236,11 +236,11 @@ exports.handler = onRequest(async (req, res) => {
             await updateJobStatus(jobsMetadatafilepath, payload.status, {
                 completionTime: new Date().toISOString(),
             });
-            if (worker === "PySCF") {
-                await handleJobCompletionPySCF(jobsMetadatafilepath, payload.status);
+            if (worker === "PySCF" || worker === "UMA") {
+                await handleJobCompletionJSON(jobsMetadatafilepath, payload.status);
             } else if (worker === "QUICK") {
                 await handleJobCompletionQUICK(jobsMetadatafilepath, payload.status);
-            } 
+            }
         } else {
             //just update last updated time, nothing else to update
             await updateJobStatus(jobsMetadatafilepath, "RUNNING", {});

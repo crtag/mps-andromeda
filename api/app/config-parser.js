@@ -91,12 +91,23 @@ const ConfigReader = (function() {
             // Use spec as info
             infoParts.push('QUICK');
             infoParts.push(parsedConfig.spec);
+        } else if (worker && worker.toLowerCase() === 'uma') {
+            expectedFiles.push('XYZ');
+            infoParts.push('UMA');
+            const task = parsedConfig.task?.trim().toUpperCase();
+            if (task) infoParts.push(task);
+            infoParts.push(`CHARGE=${parsedConfig?.charge ?? 0}`);
+            infoParts.push(`MULTIPLICITY=${parsedConfig?.multiplicity ?? 1}`);
         } else {
             infoParts.push(`UNKNOWN_WORKER=${worker}`);
         }
         
-        const info = infoParts.join(' ');
-        
+        const info = {
+            display: infoParts.join(' '),
+            charge: parseInt(parsedConfig.charge, 10) || 0,
+            multiplicity: parseInt(parsedConfig.multiplicity, 10) || 1,
+        };
+
         return {
             expectedFiles,
             info
